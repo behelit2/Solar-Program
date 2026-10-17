@@ -1,3 +1,6 @@
+<img width="1602" height="1295" alt="image" src="https://github.com/user-attachments/assets/d6b234ac-b982-4dbd-972c-df54520e969a" />
+
+
 SOLAR PROGRAM
  
 Created by: Matthew Taraschke - 2026
