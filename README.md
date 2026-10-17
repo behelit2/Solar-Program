@@ -6,6 +6,9 @@ SOLAR PROGRAM
 Created by: Matthew Taraschke - 2026
 “I’m a massive fan of NASA and the 1979 arcade classic Lunar Lander.”
 
+# PLAY NOW!
+https://behelit2.github.io/Solar-Program/
+
 ===
 WHAT IS IT?
 
