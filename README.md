@@ -9,6 +9,33 @@ Created by: Matthew Taraschke - 2026
 # PLAY NOW!
 https://behelit2.github.io/Solar-Program/
 
+QUICK START - ONE FILE
+===
+
+Solar Program is a complete persistant simulation in a single `index.html` file. There is
+nothing to install or build, and there are no packages or separate audio files.
+
+With Python 3 installed, open a terminal in the directory containing
+`index.html` and run:
+
+```bash
+python -m http.server 8000
+```
+
+Then open:
+
+http://localhost:8000/
+
+That is the entire local launch process. Python only serves the file; the game,
+styles, programmatic artwork, Instruction Manual, and audio are contained in
+the HTML.
+
+On Windows, if `python` is not available as a command, use:
+
+```powershell
+py -m http.server 8000
+```
+
 ===
 WHAT IS IT?
 
