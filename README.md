@@ -321,8 +321,7 @@ Communication delay is calculated from path distance divided by the speed of lig
 Local crew command
 Crewed spacecraft retain onboard command capability.
 
-===
-CONSTRUCTION, RESOURCES, AND STAGING
+# CONSTRUCTION, RESOURCES, AND STAGING
 
 A full Vehicle Assembly Building
 Construct spacecraft from parts with physical dimensions, attachment nodes, orientation, dry mass, resources, and stage assignments.
