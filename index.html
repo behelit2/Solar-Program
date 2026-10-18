@@ -51309,9 +51309,38 @@ launchCurrentRocket = async function launchCurrentRocketSasOff() {
       return;
     }
 
+    const remainingBeforeV19 =
+      Math.max(
+        0,
+        finiteV8(
+          node.targetDeltaVV8
+        ) -
+        finiteV8(
+          node.deliveredDeltaVV8
+        )
+      );
+
+    if (remainingBeforeV19 <= 1e-6) {
+      window.SolarProgram
+        .dockingManeuverV19
+        ?.invalidatePrediction(
+          vessel,
+          false
+        );
+
+      finishManeuverV8(
+        node,
+        vessel
+      );
+
+      return;
+    }
+
     let thrustX = 0;
     let thrustY = 0;
     let totalThrust = 0;
+
+    const producingEngineIdsV19 = [];
 
     for (const part of vessel.parts) {
       if (
@@ -51361,6 +51390,23 @@ launchCurrentRocket = async function launchCurrentRocketSasOff() {
         thrust;
 
       totalThrust += thrust;
+
+      producingEngineIdsV19.push(
+        part.id
+      );
+    }
+
+    if (totalThrust > 1e-6) {
+      node.hadThrustV19 = true;
+
+      node.lastProducingEngineIdsV19 =
+        producingEngineIdsV19;
+
+      node.awaitingPostStageThrustV19 =
+        false;
+
+      node.autoStageUnavailableV19 =
+        false;
     }
 
     const projectedThrust =
@@ -51382,6 +51428,149 @@ launchCurrentRocket = async function launchCurrentRocketSasOff() {
       totalThrust <= 1e-6 ||
       projectedThrust <= 1e-6
     ) {
+      const previousEngineIdsV19 =
+        Array.isArray(
+          node.lastProducingEngineIdsV19
+        )
+          ? node.lastProducingEngineIdsV19
+          : [];
+
+      const depletionConfirmedV19 =
+        previousEngineIdsV19.length > 0 &&
+        previousEngineIdsV19.every(
+          partId => {
+            const part =
+              findPart(
+                vessel,
+                partId
+              );
+
+            if (
+              !part ||
+              part.destroyed
+            ) {
+              /*
+               * A destroyed or unexpectedly missing engine is not treated as
+               * propellant depletion. The normal abort path remains active.
+               */
+              return false;
+            }
+
+            return Boolean(
+              part.engineFlameout ||
+              (
+                !part.engineActive &&
+                Math.max(
+                  0,
+                  finiteV8(
+                    part.runtime
+                      ?.lastThrustV53,
+                    part.runtime
+                      ?.lastThrust
+                  )
+                ) <= 1e-6
+              )
+            );
+          }
+        );
+
+      const waitingForNextPoweredStageV19 =
+        Boolean(
+          node.awaitingPostStageThrustV19
+        );
+
+      const autoStageRequestedV19 =
+        Boolean(
+          node.autoStageOnFuelDepletionV19 &&
+          node.hadThrustV19 &&
+          !node.autoStageUnavailableV19 &&
+          (
+            depletionConfirmedV19 ||
+            waitingForNextPoweredStageV19
+          )
+        );
+
+      const lastAutoStageTimeV19 =
+        Number.isFinite(
+          Number(
+            node.lastAutoStageTimeV19
+          )
+        )
+          ? Number(
+              node.lastAutoStageTimeV19
+            )
+          : -Infinity;
+
+      const stageCooldownCompleteV19 =
+        sim.time -
+        lastAutoStageTimeV19 >=
+        0.15;
+
+      const autoStageAttemptsV19 =
+        Math.max(
+          0,
+          Math.round(
+            finiteV8(
+              node.autoStageAttemptsV19
+            )
+          )
+        );
+
+      if (
+        autoStageRequestedV19 &&
+        stageCooldownCompleteV19 &&
+        autoStageAttemptsV19 < 32
+      ) {
+        node.lastAutoStageTimeV19 =
+          sim.time;
+
+        node.autoStageAttemptsV19 =
+          autoStageAttemptsV19 + 1;
+
+        const staged =
+          activateNextStage(
+            vessel
+          );
+
+        if (staged) {
+          node.noThrustTimeV8 = 0;
+
+          node.awaitingPostStageThrustV19 =
+            true;
+
+          node.lastProducingEngineIdsV19 =
+            [];
+
+          vessel.throttle = 1;
+
+          vessel.sasMode = "hold";
+
+          vessel.holdAngle =
+            finiteV8(
+              node.burnAngleV8,
+              vessel.angle
+            );
+
+          window.SolarProgram
+            .dockingManeuverV19
+            ?.invalidatePrediction(
+              vessel,
+              false
+            );
+
+          logMissionEvent(
+            vessel,
+            `Maneuver auto-staged after propellant depletion · ` +
+            `${formatSpeed(remainingBeforeV19)} remaining`
+          );
+
+          return;
+        }
+
+        node.autoStageUnavailableV19 =
+          true;
+      }
+
       node.noThrustTimeV8 +=
         dt;
 
@@ -51389,13 +51578,22 @@ launchCurrentRocket = async function launchCurrentRocketSasOff() {
         node.noThrustTimeV8 >=
         MANEUVER_NO_THRUST_TIMEOUT_V8
       ) {
+        window.SolarProgram
+          .dockingManeuverV19
+          ?.invalidatePrediction(
+            vessel,
+            false
+          );
+
         finishManeuverV8(
           node,
           vessel,
           {
             aborted: true,
             reason:
-              "thrust or propellant was lost"
+              node.autoStageOnFuelDepletionV19
+                ? "propellant was depleted and no usable next stage was available"
+                : "thrust or propellant was lost"
           }
         );
       }
@@ -51427,6 +51625,13 @@ launchCurrentRocket = async function launchCurrentRocketSasOff() {
       node.deliveredDeltaVV8 + 1e-6 >=
       node.targetDeltaVV8
     ) {
+      window.SolarProgram
+        .dockingManeuverV19
+        ?.invalidatePrediction(
+          vessel,
+          false
+        );
+
       finishManeuverV8(
         node,
         vessel
@@ -51462,10 +51667,87 @@ launchCurrentRocket = async function launchCurrentRocketSasOff() {
           )
         : 1 / 60;
 
+    /*
+     * SOLAR_V19_ORDERED_MANEUVER_SCHEDULER
+     *
+     * Only one node per vessel may own SAS/throttle automation. Later nodes
+     * remain visible in the sequential prediction, but cannot overwrite the
+     * attitude or active-burn state of the earliest pending node.
+     */
+    const candidatesByVesselV19 =
+      new Map();
+
+    for (const candidate of sim.maneuvers) {
+      normalizeManeuverNodeV8(candidate);
+
+      if (
+        candidate.completed ||
+        !sim.vesselMap.has(
+          candidate.vesselId
+        )
+      ) {
+        continue;
+      }
+
+      if (
+        !candidatesByVesselV19.has(
+          candidate.vesselId
+        )
+      ) {
+        candidatesByVesselV19.set(
+          candidate.vesselId,
+          []
+        );
+      }
+
+      candidatesByVesselV19
+        .get(candidate.vesselId)
+        .push(candidate);
+    }
+
+    const preferredNodeByVesselV19 =
+      new Map();
+
+    for (const [
+      vesselId,
+      candidates
+    ] of candidatesByVesselV19) {
+      candidates.sort(
+        (first, second) =>
+          first.time - second.time
+      );
+
+      const activeCandidate =
+        candidates.find(candidate =>
+          candidate.executionStateV8 ===
+          "burning"
+        ) ||
+        candidates.find(candidate =>
+          candidate.executionStateV8 ===
+          "aligning"
+        ) ||
+        candidates[0];
+
+      if (activeCandidate) {
+        preferredNodeByVesselV19.set(
+          vesselId,
+          activeCandidate.id
+        );
+      }
+    }
+
     for (const node of sim.maneuvers) {
       normalizeManeuverNodeV8(node);
 
       if (node.completed) continue;
+
+      if (
+        preferredNodeByVesselV19.get(
+          node.vesselId
+        ) !== node.id
+      ) {
+        continue;
+      }
 
       const vessel =
         sim.vesselMap.get(
@@ -56085,6 +56367,85 @@ launchCurrentRocket = async function launchCurrentRocketSasOff() {
         : 0.05;
     }
 
+
+    /*
+     * SOLAR_V19_SEQUENTIAL_MANEUVER_EVENT
+     *
+     * Ordinary maneuver nodes are expressed in the local orbital frame.
+     * Resolve that frame only when the sequential worker reaches the node.
+     * Earlier events have therefore already changed the propagated state.
+     *
+     * Lambert/transfer-planner events remain inertial and are not altered.
+     */
+    function resolvePredictionEventV19(
+      event,
+      world
+    ) {
+      if (event.resolvedV19) return;
+
+      if (event.frameV19 === "orbital") {
+        const reference =
+          classifyReference(world);
+
+        const relativeX =
+          reference
+            ? world.vessel.x -
+              reference.x
+            : world.vessel.x;
+
+        const relativeY =
+          reference
+            ? world.vessel.y -
+              reference.y
+            : world.vessel.y;
+
+        const relativeVx =
+          reference
+            ? world.vessel.vx -
+              reference.vx
+            : world.vessel.vx;
+
+        const relativeVy =
+          reference
+            ? world.vessel.vy -
+              reference.vy
+            : world.vessel.vy;
+
+        const radial =
+          normalized(
+            relativeX,
+            relativeY,
+            1,
+            0
+          );
+
+        const prograde =
+          normalized(
+            relativeVx,
+            relativeVy,
+            -radial.y,
+            radial.x
+          );
+
+        event.dvx =
+          prograde.x *
+          (Number(event.prograde) || 0) +
+          radial.x *
+          (Number(event.radial) || 0);
+
+        event.dvy =
+          prograde.y *
+          (Number(event.prograde) || 0) +
+          radial.y *
+          (Number(event.radial) || 0);
+
+        event.resolvedReferenceIdV19 =
+          reference?.id || null;
+      }
+
+      event.resolvedV19 = true;
+    }
+
     function eventAcceleration(
       events,
       time
@@ -56157,6 +56518,7 @@ launchCurrentRocket = async function launchCurrentRocketSasOff() {
 
       const path = [];
       const nodeStates = {};
+      const eventVectors = {};
       const recordedEvents =
         new Set();
 
@@ -56205,11 +56567,27 @@ launchCurrentRocket = async function launchCurrentRocketSasOff() {
             time >=
               event.start - 1e-8
           ) {
+            resolvePredictionEventV19(
+              event,
+              world
+            );
+
             nodeStates[event.id] =
               stateRecord(
                 world,
                 time
               );
+
+            eventVectors[event.id] = {
+              x:
+                Number(event.dvx) || 0,
+              y:
+                Number(event.dvy) || 0,
+              refId:
+                event.resolvedReferenceIdV19 ||
+                nodeStates[event.id].refId ||
+                null
+            };
 
             recordedEvents.add(
               event.id
@@ -56325,6 +56703,11 @@ launchCurrentRocket = async function launchCurrentRocketSasOff() {
             event.id
           )
         ) {
+          resolvePredictionEventV19(
+            event,
+            world
+          );
+
           nodeStates[event.id] =
             stateRecord(
               world,
@@ -56333,6 +56716,17 @@ launchCurrentRocket = async function launchCurrentRocketSasOff() {
                 event.start
               )
             );
+
+          eventVectors[event.id] = {
+            x:
+              Number(event.dvx) || 0,
+            y:
+              Number(event.dvy) || 0,
+            refId:
+              event.resolvedReferenceIdV19 ||
+              nodeStates[event.id].refId ||
+              null
+          };
         }
       }
 
@@ -56356,6 +56750,7 @@ launchCurrentRocket = async function launchCurrentRocketSasOff() {
         world,
         path,
         nodeStates,
+        eventVectors,
         collisionId
       };
     }
@@ -56849,6 +57244,11 @@ launchCurrentRocket = async function launchCurrentRocketSasOff() {
               0.05
             );
 
+          const frameV19 =
+            event.frameV19 === "orbital"
+              ? "orbital"
+              : "inertial";
+
           return {
             id: event.id,
             start:
@@ -56862,12 +57262,22 @@ launchCurrentRocket = async function launchCurrentRocketSasOff() {
                 Number(event.time) || 0
               ) + duration,
             duration,
+            frameV19,
+            prograde:
+              Number(event.prograde) || 0,
+            radial:
+              Number(event.radial) || 0,
             dvx:
               Number(event.dvx) || 0,
             dvy:
-              Number(event.dvy) || 0
+              Number(event.dvy) || 0,
+            resolvedV19:
+              frameV19 !== "orbital"
           };
-        });
+        }).sort(
+          (first, second) =>
+            first.start - second.start
+        );
 
       const run =
         runWorld(
@@ -56881,6 +57291,8 @@ launchCurrentRocket = async function launchCurrentRocketSasOff() {
         path: run.path,
         nodeStates:
           run.nodeStates,
+        eventVectors:
+          run.eventVectors,
         collisionId:
           run.collisionId
       };
@@ -59279,10 +59691,23 @@ launchCurrentRocket = async function launchCurrentRocketSasOff() {
       return;
     }
 
-    const predicted =
+    const vesselPredictionV19 =
       MISSION_V9
-        .nodePredictionStates
-        .get(node.id);
+        .trajectoryPredictions
+        .get(vessel.id);
+
+    const predicted =
+      (
+        vesselPredictionV19 &&
+        vesselPredictionV19.hash ===
+          vessel.currentManeuverPredictionHashV19 &&
+        node.predictionHashV19 ===
+          vesselPredictionV19.hash
+      )
+        ? MISSION_V9
+            .nodePredictionStates
+            .get(node.id)
+        : null;
 
     if (predicted) {
       const reference =
@@ -59366,22 +59791,53 @@ launchCurrentRocket = async function launchCurrentRocketSasOff() {
     vessel,
     nodes
   ) {
+    /*
+     * SOLAR_V19_MANEUVER_PLAN_HASH
+     *
+     * Hash only the plan and a small simulation-time epoch. The former
+     * implementation included meter-scale live vessel coordinates, causing
+     * the hash to change almost every animation frame and preventing worker
+     * results from settling.
+     */
     return [
       vessel.id,
+      vessel.referenceBodyId || "",
+      finiteV9(
+        vessel.maneuverPlanRevisionV19
+      ),
       Math.floor(sim.time / 5),
-      Math.round(vessel.x / 10),
-      Math.round(vessel.y / 10),
-      Math.round(vessel.vx * 10),
-      Math.round(vessel.vy * 10),
       ...nodes.map(node => {
-        const burn =
-          maneuverBurnVector(node);
+        const inertial =
+          node.inertialDeltaVV9;
+
+        const vectorText =
+          inertial &&
+          Number.isFinite(
+            Number(inertial.x)
+          ) &&
+          Number.isFinite(
+            Number(inertial.y)
+          )
+            ? [
+                "I",
+                Number(inertial.x)
+                  .toFixed(6),
+                Number(inertial.y)
+                  .toFixed(6)
+              ].join(":")
+            : [
+                "L",
+                finiteV9(node.prograde)
+                  .toFixed(6),
+                finiteV9(node.radial)
+                  .toFixed(6)
+              ].join(":");
 
         return [
           node.id,
-          Math.round(node.time),
-          burn.x.toFixed(3),
-          burn.y.toFixed(3),
+          Number(node.time)
+            .toFixed(6),
+          vectorText,
           node.completed ? 1 : 0
         ].join(":");
       })
@@ -59417,6 +59873,9 @@ launchCurrentRocket = async function launchCurrentRocketSasOff() {
         nodes
       );
 
+    vessel.currentManeuverPredictionHashV19 =
+      hash;
+
     const existing =
       MISSION_V9
         .trajectoryPredictions
@@ -59438,8 +59897,43 @@ launchCurrentRocket = async function launchCurrentRocketSasOff() {
 
     const events =
       nodes.map(node => {
-        const burn =
-          maneuverBurnVector(node);
+        const inertial =
+          node.inertialDeltaVV9;
+
+        const isInertial =
+          Boolean(
+            inertial &&
+            Number.isFinite(
+              Number(inertial.x)
+            ) &&
+            Number.isFinite(
+              Number(inertial.y)
+            )
+          );
+
+        const prograde =
+          finiteV9(node.prograde);
+
+        const radial =
+          finiteV9(node.radial);
+
+        const dvx =
+          isInertial
+            ? Number(inertial.x)
+            : 0;
+
+        const dvy =
+          isInertial
+            ? Number(inertial.y)
+            : 0;
+
+        const magnitude =
+          isInertial
+            ? hypot2(dvx, dvy)
+            : hypot2(
+                prograde,
+                radial
+              );
 
         return {
           id: node.id,
@@ -59448,12 +59942,18 @@ launchCurrentRocket = async function launchCurrentRocketSasOff() {
               0,
               node.time - sim.time
             ),
-          dvx: burn.x,
-          dvy: burn.y,
+          frameV19:
+            isInertial
+              ? "inertial"
+              : "orbital",
+          prograde,
+          radial,
+          dvx,
+          dvy,
           duration:
             burnDurationEstimateV9(
               capability,
-              burn.magnitude
+              magnitude
             )
         };
       });
@@ -59535,6 +60035,24 @@ launchCurrentRocket = async function launchCurrentRocketSasOff() {
         .predictionJobs
         .delete(vessel.id);
 
+      /*
+       * Commit one complete plan revision atomically. Remove all prior node
+       * states for this vessel before installing the new sequential result.
+       */
+      for (const candidate of sim.maneuvers) {
+        if (
+          candidate.vesselId ===
+          vessel.id
+        ) {
+          MISSION_V9
+            .nodePredictionStates
+            .delete(candidate.id);
+
+          delete candidate.predictionHashV19;
+          delete candidate.resolvedDeltaVV19;
+        }
+      }
+
       MISSION_V9
         .trajectoryPredictions
         .set(
@@ -59542,6 +60060,8 @@ launchCurrentRocket = async function launchCurrentRocketSasOff() {
           {
             hash,
             path: result.path,
+            eventVectors:
+              result.eventVectors || {},
             collisionId:
               result.collisionId,
             generatedAt:
@@ -59561,6 +60081,32 @@ launchCurrentRocket = async function launchCurrentRocketSasOff() {
             nodeId,
             state
           );
+
+        const liveNode =
+          sim.maneuvers.find(
+            candidate =>
+              candidate.id === nodeId
+          );
+
+        if (liveNode) {
+          liveNode.predictionHashV19 =
+            hash;
+
+          const resolved =
+            result.eventVectors
+              ?.[nodeId];
+
+          if (resolved) {
+            liveNode.resolvedDeltaVV19 = {
+              x:
+                Number(resolved.x) || 0,
+              y:
+                Number(resolved.y) || 0,
+              refId:
+                resolved.refId || null
+            };
+          }
+        }
       }
     }).catch(error => {
       MISSION_V9
@@ -59744,6 +60290,12 @@ launchCurrentRocket = async function launchCurrentRocketSasOff() {
         .trajectoryPredictions
         .get(vessel.id);
 
+    const currentHashV19 =
+      maneuverPredictionHashV9(
+        vessel,
+        nodes
+      );
+
     const selected =
       sim.selected?.type ===
         "vessel" &&
@@ -59752,6 +60304,8 @@ launchCurrentRocket = async function launchCurrentRocketSasOff() {
 
     if (
       prediction &&
+      prediction.hash ===
+        currentHashV19 &&
       drawNBodyPathV9(
         context,
         prediction,
@@ -82590,6 +83144,1526 @@ launchCurrentRocket = async function launchCurrentRocketSasOff() {
 })();
 
 /* SOLAR_DOCKED_CREW_EMPTY_SEAT_V17_JS_END */
+
+
+/* SOLAR_DOCKING_MANEUVER_V19_JS_BEGIN */
+
+/* ==========================================================================
+   SOLAR PROGRAM DOCKING / MANEUVER V19
+
+   Targeted corrections:
+   - exact docking-port mating pose before the existing merge chain
+   - complete maneuver cancellation
+   - per-node optional auto-stage on propellant depletion
+   - revision-safe maneuver prediction invalidation
+   - backward-compatible persistence of the auto-stage option
+
+   The existing docking capture limits, docking metadata, undocking logic,
+   staging logic, vessel merging, transfer planner, and save schema remain
+   authoritative.
+   ========================================================================== */
+
+(function installDockingManeuverV19() {
+  "use strict";
+
+  if (runtime.dockingManeuverPatchV19) return;
+
+  const PATCH_VERSION_V19 = "19.0";
+
+  function finiteV19(
+    value,
+    fallback = 0
+  ) {
+    const number =
+      Number(value);
+
+    return Number.isFinite(number)
+      ? number
+      : fallback;
+  }
+
+  function maneuverStateV19() {
+    return (
+      window.SolarProgram
+        .missionV9 ||
+      null
+    );
+  }
+
+  function saveSoonV19(
+    delay = 120
+  ) {
+    if (
+      typeof scheduleUnifiedSaveV6 ===
+        "function"
+    ) {
+      scheduleUnifiedSaveV6(
+        delay
+      );
+
+      return;
+    }
+
+    if (
+      sim.initialized &&
+      typeof saveSimulationNow ===
+        "function"
+    ) {
+      saveSimulationNow({
+        quiet: true
+      });
+    }
+  }
+
+  /* =======================================================================
+     Prediction invalidation
+     ======================================================================= */
+
+  function invalidateManeuverPredictionV19(
+    vessel,
+    persist = false
+  ) {
+    if (!vessel) return;
+
+    vessel.maneuverPlanRevisionV19 =
+      Math.max(
+        0,
+        Math.round(
+          finiteV19(
+            vessel
+              .maneuverPlanRevisionV19
+          )
+        )
+      ) + 1;
+
+    delete vessel
+      .currentManeuverPredictionHashV19;
+
+    const mission =
+      maneuverStateV19();
+
+    mission
+      ?.trajectoryPredictions
+      ?.delete(vessel.id);
+
+    mission
+      ?.predictionJobs
+      ?.delete(vessel.id);
+
+    runtime
+      .predictionCache
+      ?.delete(vessel.id);
+
+    for (const node of sim.maneuvers) {
+      if (
+        node.vesselId !==
+        vessel.id
+      ) {
+        continue;
+      }
+
+      mission
+        ?.nodePredictionStates
+        ?.delete(node.id);
+
+      delete node.predictionHashV19;
+      delete node.resolvedDeltaVV19;
+      delete node.predictedState;
+    }
+
+    if (persist) {
+      saveSoonV19();
+    }
+  }
+
+  /* =======================================================================
+     Exact docking alignment
+     ======================================================================= */
+
+  function dockingPortStateV19(
+    vessel,
+    portRecord
+  ) {
+    const part =
+      portRecord?.part ||
+      portRecord;
+
+    const definition =
+      part
+        ? getPartDef(part.defId)
+        : null;
+
+    if (
+      !vessel ||
+      !part ||
+      !definition?.dockingPort
+    ) {
+      return null;
+    }
+
+    const center =
+      vesselPartWorldPosition(
+        vessel,
+        part
+      );
+
+    const angle =
+      vesselPartWorldAngle(
+        vessel,
+        part
+      );
+
+    const normalX =
+      Math.cos(angle);
+
+    const normalY =
+      Math.sin(angle);
+
+    const faceOffset =
+      definition.height * 0.5;
+
+    return {
+      vessel,
+      part,
+      definition,
+      center,
+      angle,
+      normalX,
+      normalY,
+      faceOffset,
+      face: {
+        x:
+          center.x +
+          normalX *
+          faceOffset,
+
+        y:
+          center.y +
+          normalY *
+          faceOffset
+      }
+    };
+  }
+
+  function alignMovingDockingPortV19(
+    fixedVessel,
+    movingVessel,
+    fixedPortRecord,
+    movingPortRecord
+  ) {
+    const fixed =
+      dockingPortStateV19(
+        fixedVessel,
+        fixedPortRecord
+      );
+
+    const moving =
+      dockingPortStateV19(
+        movingVessel,
+        movingPortRecord
+      );
+
+    if (
+      !fixed ||
+      !moving ||
+      fixed.definition
+        .dockingPort
+        .size !==
+      moving.definition
+        .dockingPort
+        .size
+    ) {
+      return null;
+    }
+
+    const oldPose = {
+      x:
+        movingVessel.x,
+
+      y:
+        movingVessel.y,
+
+      angle:
+        movingVessel.angle
+    };
+
+    const targetPortAngle =
+      wrapAngle(
+        fixed.angle +
+        Math.PI
+      );
+
+    const correction =
+      angleDelta(
+        moving.angle,
+        targetPortAngle
+      );
+
+    const newVesselAngle =
+      wrapAngle(
+        movingVessel.angle +
+        correction
+      );
+
+    /*
+     * localToWorld(local, origin=0) gives the part-center offset from the
+     * vessel origin at the new vessel angle.
+     */
+    const partCenterOffset =
+      localToWorld(
+        moving.part.x,
+        moving.part.y,
+        0,
+        0,
+        newVesselAngle
+      );
+
+    const newPortAngle =
+      newVesselAngle +
+      moving.part.rotation;
+
+    const newNormalX =
+      Math.cos(newPortAngle);
+
+    const newNormalY =
+      Math.sin(newPortAngle);
+
+    const movingFaceOffsetX =
+      partCenterOffset.x +
+      newNormalX *
+      moving.faceOffset;
+
+    const movingFaceOffsetY =
+      partCenterOffset.y +
+      newNormalY *
+      moving.faceOffset;
+
+    const newX =
+      fixed.face.x -
+      movingFaceOffsetX;
+
+    const newY =
+      fixed.face.y -
+      movingFaceOffsetY;
+
+    if (
+      !Number.isFinite(newX) ||
+      !Number.isFinite(newY) ||
+      !Number.isFinite(
+        newVesselAngle
+      )
+    ) {
+      return null;
+    }
+
+    const deltaX =
+      newX -
+      movingVessel.x;
+
+    const deltaY =
+      newY -
+      movingVessel.y;
+
+    movingVessel.x =
+      newX;
+
+    movingVessel.y =
+      newY;
+
+    movingVessel.angle =
+      newVesselAngle;
+
+    if (
+      Number.isFinite(
+        movingVessel.previousX
+      )
+    ) {
+      movingVessel.previousX +=
+        deltaX;
+    }
+
+    if (
+      Number.isFinite(
+        movingVessel.previousY
+      )
+    ) {
+      movingVessel.previousY +=
+        deltaY;
+    }
+
+    if (
+      Number.isFinite(
+        movingVessel.renderX
+      )
+    ) {
+      movingVessel.renderX +=
+        deltaX;
+    }
+
+    if (
+      Number.isFinite(
+        movingVessel.renderY
+      )
+    ) {
+      movingVessel.renderY +=
+        deltaY;
+    }
+
+    if (
+      Number.isFinite(
+        movingVessel.holdAngle
+      )
+    ) {
+      movingVessel.holdAngle =
+        wrapAngle(
+          movingVessel.holdAngle +
+          correction
+        );
+    }
+
+    const fixedAfter =
+      dockingPortStateV19(
+        fixedVessel,
+        fixedPortRecord
+      );
+
+    const movingAfter =
+      dockingPortStateV19(
+        movingVessel,
+        movingPortRecord
+      );
+
+    if (
+      !fixedAfter ||
+      !movingAfter
+    ) {
+      return null;
+    }
+
+    const faceError =
+      distance(
+        fixedAfter.face.x,
+        fixedAfter.face.y,
+        movingAfter.face.x,
+        movingAfter.face.y
+      );
+
+    const angleError =
+      Math.abs(
+        angleDelta(
+          fixedAfter.angle,
+          movingAfter.angle +
+          Math.PI
+        )
+      );
+
+    return {
+      fixedVesselId:
+        fixedVessel.id,
+
+      movingVesselId:
+        movingVessel.id,
+
+      fixedPortId:
+        fixedAfter.part.id,
+
+      movingPortId:
+        movingAfter.part.id,
+
+      correction,
+
+      faceError,
+
+      angleError,
+
+      oldPose,
+
+      newPose: {
+        x:
+          movingVessel.x,
+
+        y:
+          movingVessel.y,
+
+        angle:
+          movingVessel.angle
+      }
+    };
+  }
+
+  const mergeDockedVesselsV19Base =
+    mergeDockedVessels;
+
+  mergeDockedVessels =
+  function mergeDockedVesselsV19(
+    vesselA,
+    vesselB,
+    portA,
+    portB
+  ) {
+    let alignment = null;
+
+    if (
+      vesselA &&
+      vesselB &&
+      vesselA.id !== vesselB.id &&
+      portA?.part &&
+      portB?.part
+    ) {
+      /*
+       * Keep the controlled vessel fixed. V14 presents the active vessel as
+       * vesselA during ordinary capture, but this also handles direct calls
+       * where the active craft was supplied as vesselB.
+       */
+      if (
+        sim.activeVesselId ===
+          vesselB.id &&
+        sim.activeVesselId !==
+          vesselA.id
+      ) {
+        alignment =
+          alignMovingDockingPortV19(
+            vesselB,
+            vesselA,
+            portB,
+            portA
+          );
+      } else {
+        alignment =
+          alignMovingDockingPortV19(
+            vesselA,
+            vesselB,
+            portA,
+            portB
+          );
+      }
+    }
+
+    const merged =
+      mergeDockedVesselsV19Base(
+        vesselA,
+        vesselB,
+        portA,
+        portB
+      );
+
+    runtime.lastDockAlignmentV19 = {
+      time:
+        sim.time,
+
+      successful:
+        Boolean(
+          merged &&
+          alignment &&
+          alignment.faceError <=
+            1e-6 &&
+          alignment.angleError <=
+            1e-8
+        ),
+
+      mergedVesselId:
+        merged?.id || null,
+
+      alignment:
+        alignment
+          ? deepClone(alignment)
+          : null
+    };
+
+    return merged;
+  };
+
+  /* =======================================================================
+     Complete maneuver cancellation
+     ======================================================================= */
+
+  function restoreCanceledNodeControlV19(
+    node,
+    vessel
+  ) {
+    if (!vessel) return;
+
+    const wasBurning =
+      node.executionStateV8 ===
+        "burning";
+
+    if (
+      node.savedSasModeV8 !==
+      undefined
+    ) {
+      vessel.sasMode =
+        node.savedSasModeV8;
+    }
+
+    if (
+      Number.isFinite(
+        Number(
+          node.savedHoldAngleV8
+        )
+      )
+    ) {
+      vessel.holdAngle =
+        Number(
+          node.savedHoldAngleV8
+        );
+    }
+
+    if (wasBurning) {
+      /*
+       * Explicit cancellation of an active maneuver is safety critical:
+       * throttleable engines are cut rather than restored to an earlier
+       * nonzero throttle value.
+       */
+      vessel.throttle = 0;
+    } else if (
+      Number.isFinite(
+        Number(
+          node.savedThrottleV8
+        )
+      )
+    ) {
+      vessel.throttle =
+        saturate(
+          Number(
+            node.savedThrottleV8
+          )
+        );
+    }
+
+    if (
+      vessel.activeManeuverNodeIdV8 ===
+        node.id
+    ) {
+      vessel.activeManeuverNodeIdV8 =
+        null;
+    }
+
+    if (
+      vessel.control
+    ) {
+      vessel.control.desiredAngle =
+        vessel.holdAngle;
+
+      vessel.control.torqueDemand = 0;
+    }
+
+    if (
+      vessel.id ===
+      sim.activeVesselId
+    ) {
+      dom.throttleInput.value =
+        Math.round(
+          vessel.throttle * 100
+        );
+
+      dom.throttleReadout.textContent =
+        `${Math.round(vessel.throttle * 100)}%`;
+
+      dom.sasSelect.value =
+        vessel.sasMode;
+    }
+  }
+
+  function cancelManeuverNodeV19(
+    nodeOrId,
+    {
+      quiet = false
+    } = {}
+  ) {
+    const node =
+      typeof nodeOrId === "string"
+        ? sim.maneuvers.find(
+            candidate =>
+              candidate.id ===
+              nodeOrId
+          )
+        : nodeOrId;
+
+    if (!node) {
+      if (!quiet) {
+        toast(
+          "That maneuver no longer exists.",
+          "warn"
+        );
+      }
+
+      return false;
+    }
+
+    const transferPlanId =
+      node.transferPlanIdV9 ||
+      null;
+
+    const removedNodes =
+      transferPlanId
+        ? sim.maneuvers.filter(
+            candidate =>
+              candidate.transferPlanIdV9 ===
+              transferPlanId
+          )
+        : [node];
+
+    const removedIds =
+      new Set(
+        removedNodes.map(
+          candidate =>
+            candidate.id
+        )
+      );
+
+    const affectedVesselIds =
+      new Set();
+
+    for (const removed of removedNodes) {
+      const vessel =
+        sim.vesselMap.get(
+          removed.vesselId
+        );
+
+      if (vessel) {
+        affectedVesselIds.add(
+          vessel.id
+        );
+
+        restoreCanceledNodeControlV19(
+          removed,
+          vessel
+        );
+
+        logMissionEvent(
+          vessel,
+          transferPlanId
+            ? "Linked transfer maneuver plan canceled"
+            : "Planned maneuver canceled"
+        );
+      }
+
+      maneuverStateV19()
+        ?.nodePredictionStates
+        ?.delete(removed.id);
+    }
+
+    sim.maneuvers =
+      sim.maneuvers.filter(
+        candidate =>
+          !removedIds.has(
+            candidate.id
+          )
+      );
+
+    if (transferPlanId) {
+      for (const plan of
+           sim.transferPlansV9 || []) {
+        if (plan.id === transferPlanId) {
+          plan.status =
+            "canceled";
+
+          plan.correctionAttempted =
+            true;
+
+          plan.correctionInProgress =
+            false;
+        }
+      }
+
+      sim.transferPlansV9 =
+        (
+          sim.transferPlansV9 || []
+        ).filter(
+          plan =>
+            plan.id !==
+            transferPlanId
+        );
+
+      const mission =
+        maneuverStateV19();
+
+      if (mission) {
+        mission.transferPlans =
+          sim.transferPlansV9;
+
+        mission
+          .transferPlanMap
+          ?.delete(transferPlanId);
+      }
+    }
+
+    for (const vesselId of
+         affectedVesselIds) {
+      const vessel =
+        sim.vesselMap.get(
+          vesselId
+        );
+
+      if (vessel) {
+        invalidateManeuverPredictionV19(
+          vessel,
+          false
+        );
+      }
+    }
+
+    refreshManeuverList();
+    saveSoonV19(0);
+
+    if (!quiet) {
+      toast(
+        transferPlanId
+          ? "Transfer maneuver plan canceled"
+          : "Maneuver canceled",
+        "warn",
+        3200
+      );
+    }
+
+    return true;
+  }
+
+  /* =======================================================================
+     Node creation and editor
+     ======================================================================= */
+
+  const createManeuverNodeV19Base =
+    createManeuverNode;
+
+  createManeuverNode =
+  function createManeuverNodeV19(
+    vessel,
+    options = {}
+  ) {
+    const node =
+      createManeuverNodeV19Base(
+        vessel,
+        options
+      );
+
+    if (!node) return node;
+
+    node.autoStageOnFuelDepletionV19 =
+      Boolean(
+        options
+          .autoStageOnFuelDepletionV19
+      );
+
+    node.autoStageAttemptsV19 =
+      0;
+
+    node.awaitingPostStageThrustV19 =
+      false;
+
+    node.autoStageUnavailableV19 =
+      false;
+
+    invalidateManeuverPredictionV19(
+      vessel,
+      true
+    );
+
+    return node;
+  };
+
+  showManeuverEditor =
+  function showManeuverEditorV19(
+    existingNode = null
+  ) {
+    const vessel =
+      existingNode
+        ? sim.vesselMap.get(
+            existingNode.vesselId
+          )
+        : activeVessel();
+
+    if (!vessel) {
+      toast(
+        "Select an active vessel first",
+        "warn"
+      );
+
+      return;
+    }
+
+    if (
+      existingNode &&
+      existingNode.executionStateV8 ===
+        "burning"
+    ) {
+      toast(
+        "Cancel the active maneuver before editing it.",
+        "warn"
+      );
+
+      return;
+    }
+
+    const form =
+      document.createElement(
+        "div"
+      );
+
+    form.innerHTML = `
+      <label class="small">
+        Time from now
+      </label>
+
+      <div class="row">
+        <input
+          id="maneuverTimeInput"
+          type="number"
+          min="0"
+          step="10"
+          value="${
+            existingNode
+              ? Math.max(
+                  0,
+                  Math.round(
+                    existingNode.time -
+                    sim.time
+                  )
+                )
+              : 60
+          }"
+        >
+
+        <span class="muted small">
+          seconds
+        </span>
+      </div>
+
+      <label
+        class="small"
+        style="display:block;margin-top:12px"
+      >
+        Prograde / retrograde Δv
+      </label>
+
+      <div class="row">
+        <input
+          id="maneuverProgradeInput"
+          type="number"
+          step="1"
+          value="${finiteV19(existingNode?.prograde)}"
+        >
+
+        <span class="muted small">
+          m/s
+        </span>
+      </div>
+
+      <label
+        class="small"
+        style="display:block;margin-top:12px"
+      >
+        Radial out / in Δv
+      </label>
+
+      <div class="row">
+        <input
+          id="maneuverRadialInput"
+          type="number"
+          step="1"
+          value="${finiteV19(existingNode?.radial)}"
+        >
+
+        <span class="muted small">
+          m/s
+        </span>
+      </div>
+
+      <div
+        class="transferPlannerOptionsV9"
+        style="margin-top:12px"
+      >
+        <label>
+          <input
+            id="maneuverAutoStageInputV19"
+            type="checkbox"
+            ${
+              existingNode
+                ?.autoStageOnFuelDepletionV19
+                ? "checked"
+                : ""
+            }
+          >
+
+          Auto-stage if propellant is depleted during the burn
+        </label>
+      </div>
+
+      <p class="muted small">
+        Positive prograde raises the opposite side of an orbit.
+        Negative prograde is retrograde. Positive radial points away
+        from the current reference body.
+      </p>
+
+      <p class="muted small">
+        Auto-stage uses the vessel's existing stage plan. It is off by
+        default. If enabled, one stage command is issued at a time after
+        a producing engine becomes fuel-starved; the next stage continues
+        only the remaining delta-v.
+      </p>
+    `;
+
+    const buttons = [
+      {
+        label: "Close",
+        value: null
+      }
+    ];
+
+    if (existingNode) {
+      buttons.push({
+        label: "Cancel Maneuver",
+        className: "danger",
+        action: () => {
+          cancelManeuverNodeV19(
+            existingNode
+          );
+        }
+      });
+    }
+
+    buttons.push({
+      label:
+        existingNode
+          ? "Update"
+          : "Create",
+
+      className:
+        "primary",
+
+      action: () => {
+        const timeOffset =
+          Math.max(
+            0,
+            Number(
+              byId(
+                "maneuverTimeInput"
+              ).value
+            ) || 0
+          );
+
+        const prograde =
+          Number(
+            byId(
+              "maneuverProgradeInput"
+            ).value
+          ) || 0;
+
+        const radial =
+          Number(
+            byId(
+              "maneuverRadialInput"
+            ).value
+          ) || 0;
+
+        const autoStage =
+          Boolean(
+            byId(
+              "maneuverAutoStageInputV19"
+            ).checked
+          );
+
+        if (existingNode) {
+          existingNode.time =
+            sim.time +
+            timeOffset;
+
+          existingNode.prograde =
+            prograde;
+
+          existingNode.radial =
+            radial;
+
+          existingNode
+            .autoStageOnFuelDepletionV19 =
+            autoStage;
+
+          existingNode
+            .executionStateV8 =
+            "planned";
+
+          existingNode.completed =
+            false;
+
+          existingNode.warnedSixty =
+            false;
+
+          existingNode.warnedNow =
+            false;
+
+          existingNode.warpReducedV8 =
+            false;
+
+          existingNode
+            .deliveredDeltaVV8 =
+            0;
+
+          existingNode
+            .noThrustTimeV8 =
+            0;
+
+          existingNode
+            .autoStageAttemptsV19 =
+            0;
+
+          existingNode
+            .awaitingPostStageThrustV19 =
+            false;
+
+          existingNode
+            .autoStageUnavailableV19 =
+            false;
+
+          delete existingNode
+            .lastProducingEngineIdsV19;
+
+          delete existingNode
+            .predictionHashV19;
+
+          delete existingNode
+            .resolvedDeltaVV19;
+
+          updateManeuverNodePosition(
+            existingNode
+          );
+
+          invalidateManeuverPredictionV19(
+            vessel,
+            true
+          );
+
+          refreshManeuverList();
+        } else {
+          createManeuverNode(
+            vessel,
+            {
+              timeOffset,
+              prograde,
+              radial,
+              autoStageOnFuelDepletionV19:
+                autoStage
+            }
+          );
+
+          refreshManeuverList();
+        }
+      }
+    });
+
+    openModal({
+      title:
+        existingNode
+          ? "Edit Maneuver Node"
+          : "New Maneuver Node",
+
+      node:
+        form,
+
+      buttons
+    });
+  };
+
+  /* =======================================================================
+     Maneuver list
+     ======================================================================= */
+
+  refreshManeuverList =
+  function refreshManeuverListV19() {
+    if (!dom.maneuverList) return;
+
+    dom.maneuverList.replaceChildren();
+
+    const nodes =
+      sim.maneuvers
+        .filter(node =>
+          !node.completed
+        )
+        .sort(
+          (first, second) =>
+            first.time -
+            second.time
+        );
+
+    if (!nodes.length) {
+      dom.maneuverList.className =
+        "muted small";
+
+      dom.maneuverList.textContent =
+        "No planned maneuvers.";
+
+      return;
+    }
+
+    dom.maneuverList.className = "";
+
+    for (const node of nodes) {
+      const vessel =
+        sim.vesselMap.get(
+          node.vesselId
+        );
+
+      if (!vessel) continue;
+
+      updateManeuverNodePosition(
+        node
+      );
+
+      const burn =
+        maneuverBurnVector(node);
+
+      const row =
+        document.createElement(
+          "div"
+        );
+
+      row.className =
+        "listItem";
+
+      const main =
+        document.createElement(
+          "div"
+        );
+
+      main.className =
+        "main";
+
+      const state =
+        node.executionStateV8 ||
+        "planned";
+
+      const label =
+        node.labelV9 ||
+        vessel.name;
+
+      const autoStageText =
+        node.autoStageOnFuelDepletionV19
+          ? " · Auto-stage"
+          : "";
+
+      main.innerHTML = `
+        <div class="title">
+          ${escapeHtml(label)}
+        </div>
+
+        <div class="sub">
+          ${escapeHtml(vessel.name)}
+          · T${node.time >= sim.time ? "−" : "+"}${escapeHtml(
+            formatDuration(
+              Math.abs(
+                node.time -
+                sim.time
+              )
+            )
+          )}
+          · Δv ${escapeHtml(
+            formatSpeed(
+              burn.magnitude
+            )
+          )}
+          · ${escapeHtml(
+            titleCase(state)
+          )}
+          ${escapeHtml(autoStageText)}
+        </div>
+      `;
+
+      const aim =
+        document.createElement(
+          "button"
+        );
+
+      aim.className =
+        "compact";
+
+      aim.textContent =
+        "Aim";
+
+      aim.disabled =
+        state === "burning";
+
+      aim.addEventListener(
+        "click",
+        () =>
+          aimAtManeuver(node)
+      );
+
+      const edit =
+        document.createElement(
+          "button"
+        );
+
+      edit.className =
+        "compact";
+
+      edit.textContent =
+        "Edit";
+
+      edit.disabled =
+        state !== "planned" ||
+        Boolean(
+          node.solverManagedV9
+        );
+
+      edit.title =
+        node.solverManagedV9
+          ? "Solver-managed transfer nodes are canceled and recreated as a linked plan."
+          : "";
+
+      edit.addEventListener(
+        "click",
+        () =>
+          showManeuverEditor(
+            node
+          )
+      );
+
+      const cancel =
+        document.createElement(
+          "button"
+        );
+
+      cancel.className =
+        "compact danger";
+
+      cancel.textContent =
+        "Cancel";
+
+      cancel.title =
+        node.transferPlanIdV9
+          ? "Cancel this linked transfer maneuver plan"
+          : "Cancel this maneuver";
+
+      cancel.setAttribute(
+        "aria-label",
+        cancel.title
+      );
+
+      cancel.addEventListener(
+        "click",
+        () => {
+          cancelManeuverNodeV19(
+            node
+          );
+        }
+      );
+
+      row.append(
+        main,
+        aim,
+        edit,
+        cancel
+      );
+
+      dom.maneuverList.appendChild(
+        row
+      );
+    }
+  };
+
+  /* =======================================================================
+     Save compatibility
+     ======================================================================= */
+
+  const serializeSimulationV19Base =
+    serializeSimulation;
+
+  serializeSimulation =
+  function serializeSimulationV19() {
+    const save =
+      serializeSimulationV19Base();
+
+    const liveById =
+      new Map(
+        sim.maneuvers.map(node => [
+          node.id,
+          node
+        ])
+      );
+
+    for (const rawNode of
+         save.maneuvers || []) {
+      const liveNode =
+        liveById.get(
+          rawNode.id
+        );
+
+      rawNode
+        .autoStageOnFuelDepletionV19 =
+        Boolean(
+          liveNode
+            ?.autoStageOnFuelDepletionV19
+        );
+    }
+
+    save.dockingManeuverVersionV19 =
+      PATCH_VERSION_V19;
+
+    return save;
+  };
+
+  const restoreSimulationV19Base =
+    restoreSimulation;
+
+  restoreSimulation =
+  function restoreSimulationV19(save) {
+    const result =
+      restoreSimulationV19Base(
+        save
+      );
+
+    const rawById =
+      new Map(
+        (
+          save?.maneuvers || []
+        )
+          .filter(node =>
+            node?.id
+          )
+          .map(node => [
+            node.id,
+            node
+          ])
+      );
+
+    for (const node of sim.maneuvers) {
+      const raw =
+        rawById.get(node.id);
+
+      node
+        .autoStageOnFuelDepletionV19 =
+        Boolean(
+          raw
+            ?.autoStageOnFuelDepletionV19
+        );
+
+      node.autoStageAttemptsV19 =
+        0;
+
+      node.awaitingPostStageThrustV19 =
+        false;
+
+      node.autoStageUnavailableV19 =
+        false;
+
+      delete node
+        .lastProducingEngineIdsV19;
+
+      delete node
+        .predictionHashV19;
+
+      delete node
+        .resolvedDeltaVV19;
+    }
+
+    const mission =
+      maneuverStateV19();
+
+    mission
+      ?.nodePredictionStates
+      ?.clear();
+
+    mission
+      ?.trajectoryPredictions
+      ?.clear();
+
+    mission
+      ?.predictionJobs
+      ?.clear();
+
+    for (const vessel of sim.vessels) {
+      vessel.maneuverPlanRevisionV19 =
+        Math.max(
+          1,
+          Math.round(
+            finiteV19(
+              vessel
+                .maneuverPlanRevisionV19
+            )
+          )
+        );
+
+      delete vessel
+        .currentManeuverPredictionHashV19;
+    }
+
+    refreshManeuverList();
+
+    return result;
+  };
+
+  /* =======================================================================
+     Public diagnostics
+     ======================================================================= */
+
+  window.SolarProgram
+    .dockingManeuverV19 = {
+      version:
+        PATCH_VERSION_V19,
+
+      invalidatePrediction(
+        vesselOrId,
+        persist = false
+      ) {
+        const vessel =
+          typeof vesselOrId ===
+            "string"
+            ? sim.vesselMap.get(
+                vesselOrId
+              )
+            : vesselOrId;
+
+        invalidateManeuverPredictionV19(
+          vessel,
+          persist
+        );
+      },
+
+      cancelManeuver:
+        cancelManeuverNodeV19,
+
+      getLastDockAlignment() {
+        return deepClone(
+          runtime
+            .lastDockAlignmentV19 ||
+          null
+        );
+      },
+
+      getVesselPlanRevision(
+        vesselId =
+          sim.activeVesselId
+      ) {
+        return finiteV19(
+          sim.vesselMap.get(
+            vesselId
+          )
+            ?.maneuverPlanRevisionV19
+        );
+      },
+
+      getNode(nodeId) {
+        const node =
+          sim.maneuvers.find(
+            candidate =>
+              candidate.id ===
+              nodeId
+          );
+
+        return node
+          ? deepClone(node)
+          : null;
+      }
+    };
+
+  runtime.dockingManeuverPatchV19 =
+    true;
+
+  runtime.dockingManeuverVersionV19 =
+    PATCH_VERSION_V19;
+})();
+
+/* SOLAR_DOCKING_MANEUVER_V19_JS_END */
+
 
 initializeApplication();
 
