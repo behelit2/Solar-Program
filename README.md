@@ -431,6 +431,26 @@ Audio support includes looping music, separate music and effects levels, thrust-
 Consistent operational rules
 Stage 0 activates first, armed parachutes deploy automatically when conditions permit, flags remain body-fixed, and debris follows a defined one-simulated-day lifecycle.
 
+# POSSIBLE LANDING LOCATIONS
+
+A player can reasonably build missions to land and return from:
+
+Mercury
+Venus
+Earth
+Mars
+Ceres
+Pluto
+Haumea
+Makemake
+Eris
+all 425 modeled moons
+all 109 modeled asteroids
+all 15 modeled comets
+
+558 landable objects, total.
+
+
 # FROM LUNAR LANDER TO A SOLAR SYSTEM OF POSSIBILITIES
 
 
