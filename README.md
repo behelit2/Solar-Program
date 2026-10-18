@@ -1,7 +1,7 @@
 <img width="1602" height="1295" alt="image" src="https://github.com/user-attachments/assets/d6b234ac-b982-4dbd-972c-df54520e969a" />
 
 
-SOLAR PROGRAM
+# SOLAR PROGRAM
  
 Created by: Matthew Taraschke - 2026
 “I’m a massive fan of NASA and the 1979 arcade classic Lunar Lander.”
@@ -69,8 +69,7 @@ More specifically, it combines several genres:
 
 * It demonstrates real concepts such as thrust-to-weight ratio, delta-v, specific impulse, dynamic pressure, periapsis, apoapsis, line-of-sight communications, eclipse power management, and atmospheric entry.
 
-===
-ABOUT THE SIMULATION ENGINE
+# ABOUT THE SIMULATION ENGINE
 
 Solar Program represents a bespoke, self contained, scientific grade simulator and game engine that is written entirely in vanilla html, css, and javascript. As such, it’s able to do everything using a single CPU core and is not heavily dependent on the GPU for rendering. Nearly everything is procedurally drawn using vector canvas elements, a hypercharged descendant of how graphics were generated in the original Lunar Lander.
 
@@ -78,11 +77,9 @@ Very large rocket designs will start to push the envelope of what one CPU can do
 
 I did my best to get everything working perfectly on iPhone and Android, but the learning curve for building and using rockets is definitely steeper than desktop browsers. Users should use a desktop/laptop browser to learn how to play initially, then everything on the mobile interface will make more sense. It can also be useful to build rockets on a desktop/laptop and export the design to your phone.
 
-===
 Below is a full accounting of everything Solar Program accurately simulates.
 
-===
-CELESTIAL MECHANICS AND ORBITAL SCIENCE
+# CELESTIAL MECHANICS AND ORBITAL SCIENCE
 
 Consistent physical foundations
 Gravity, propulsion, radiation, and orbital calculations use established physical constants and a consistent internal unit system. Simulation time connects elapsed seconds, Julian dates, calendar displays, and time-warp multipliers.
@@ -117,8 +114,7 @@ Launching spacecraft inherit local surface velocity, connecting planetary rotati
 Physical diagnostics
 Source-system diagnostics track kinetic energy, pairwise gravitational potential energy, and planar angular momentum.
 
-===
-A LIVING SOLAR SYSTEM
+# A LIVING SOLAR SYSTEM
 
 Recognizable astronomical scale
 Planetary order, orbital distances, mass relationships, rotation periods, and orbital eccentricities draw on real solar-system characteristics.
@@ -138,8 +134,7 @@ Local gravitational influence, proximity, and selection stability guide the refe
 Analytical high-warp coasting
 Eligible spacecraft follow analytical two-body trajectories during high-speed orbital coasting, supporting time acceleration up to 5,000,000×.
 
-===
-SPACECRAFT PHYSICS AND PROPULSION
+# SPACECRAFT PHYSICS AND PROPULSION
 
 Force-based flight
 Spacecraft acceleration combines gravity with thrust, aerodynamic forces, lift, and RCS translation using the vehicle’s current mass.
@@ -183,8 +178,7 @@ Engine gimbals address requested torque first, while reaction wheels and RCS res
 Delivered delta-v tracking
 Automated maneuvers operate active engines, consume accessible propellant, and accumulate delivered delta-v from directional thrust and changing vehicle mass.
 
-===
-LAUNCH, GUIDANCE, AND FLIGHT OPERATIONS
+# LAUNCH, GUIDANCE, AND FLIGHT OPERATIONS
 
 Thrust-driven liftoff
 Rockets begin on a rotating launch site and release when fueled thrust provides sufficient outward acceleration to overcome local gravity.
@@ -210,8 +204,7 @@ The spacecraft aligns for a burn, returns to real-time simulation, operates its 
 Extensive flight telemetry
 Instruments report altitude, radar altitude, surface-relative speed, vertical and horizontal velocity, Mach number, dynamic pressure, acceleration, g-load, thrust, local thrust-to-weight ratio, orbital elements, estimated remaining delta-v, target range, and relative speed.
 
-===
-ATMOSPHERES, AERODYNAMICS, AND THERMAL SYSTEMS
+# ATMOSPHERES, AERODYNAMICS, AND THERMAL SYSTEMS
 
 World-specific atmospheres
 Atmospheric properties distinguish dense Venusian conditions, thin Martian air, cold Titan, Earth’s familiar environment, and the deep atmospheres of giant planets.
@@ -258,8 +251,7 @@ Solar-panel and antenna deployment responds to dynamic-pressure conditions.
 Gas-giant exploration
 Descents into giant planets encounter progressively demanding pressure and thermal environments.
 
-===
-TERRAIN, LANDING, AND SURFACE EXPLORATION
+# TERRAIN, LANDING, AND SURFACE EXPLORATION
 
 Deterministic planetary terrain
 Solid worlds feature repeatable terrain profiles with slopes, roughness, and flatter landing areas. Earth includes distinct land and ocean regions.
@@ -294,8 +286,7 @@ Debris responds to gravity, atmospheric drag, surface contact, friction, bouncin
 Persistent surface attachment
 Settled spacecraft, astronauts, flags, and debris retain body-relative positions and follow planetary rotation.
 
-===
-ELECTRICAL POWER AND COMMUNICATIONS
+# ELECTRICAL POWER AND COMMUNICATIONS
 
 Distance-dependent solar generation
 Solar output follows inverse-square distance scaling relative to the Sun.
@@ -366,8 +357,7 @@ Copied sections receive remapped internal attachments and fuel connections, with
 Built-in Pioneer I trainer
 A ready-made multi-stage orbital vehicle provides an accessible starting point for launch, staging, orbit, and recovery.
 
-===
-DOCKING, CREW, AND MISSION CONTINUITY
+# DOCKING, CREW, AND MISSION CONTINUITY
 
 Precision docking requirements
 Docking evaluates port compatibility, separation distance, relative speed, and angular alignment.
@@ -393,8 +383,7 @@ Landed astronauts can leave their spacecraft, walk across local terrain, plant p
 Earth recovery
 Recovery completes a spacecraft’s return and records its crew as recovered.
 
-===
-MANEUVER PLANNING AND TIME WARP
+# MANEUVER PLANNING AND TIME WARP
 
 Planar maneuver nodes
 Plan burns using prograde, retrograde, radial-in, and radial-out delta-v components.
@@ -414,8 +403,7 @@ Burns, EVA, docking, nearby terrain, periapsis conditions, maneuver timing, and 
 High-speed mission progression
 Analytical orbital coasting makes long-duration missions practical while preserving the connection between orbital state and elapsed simulation time.
 
-===
-PERSISTENCE, PRESENTATION, AND INTERACTION
+# PERSISTENCE, PRESENTATION, AND INTERACTION
 
 Extensive save-state coverage
 Saves preserve celestial states, spacecraft, parts, resources, temperatures, crew, flags, debris, maneuvers, blueprints, settings, transfer plans, and camera state.
@@ -444,8 +432,7 @@ Audio support includes looping music, separate music and effects levels, thrust-
 Consistent operational rules
 Stage 0 activates first, armed parachutes deploy automatically when conditions permit, flags remain body-fixed, and debris follows a defined one-simulated-day lifecycle.
 
-===
-FROM LUNAR LANDER TO A SOLAR SYSTEM OF POSSIBILITIES
+# FROM LUNAR LANDER TO A SOLAR SYSTEM OF POSSIBILITIES
 
 
 “Solar Program celebrates the precision, discovery, and engineering ambition that make spaceflight compelling. If you made it this far, you should hit me up on Facebook and tell me what you think of this application.” - Matthew Taraschke
