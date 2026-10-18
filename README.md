@@ -435,18 +435,18 @@ Stage 0 activates first, armed parachutes deploy automatically when conditions p
 
 A player can reasonably build missions to land and return from:
 
-Mercury
-Venus
-Earth
-Mars
-Ceres
-Pluto
-Haumea
-Makemake
-Eris
-all 425 modeled moons
-all 109 modeled asteroids
-all 15 modeled comets
+Mercury,
+Venus,
+Earth,
+Mars,
+Ceres,
+Pluto,
+Haumea,
+Makemake,
+Eris,
+all 425 modeled moons,
+all 109 modeled asteroids,
+and all 15 modeled comets
 
 558 landable objects, total.
 
