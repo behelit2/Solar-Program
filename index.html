@@ -10863,7 +10863,7 @@ nP+b/53/mv+d/5r/nP+c/5v/8//z//L/8//z//L/9P/x//T/8v/z/5z/m/+c/5v/nP+b/53/mv+c/5z/
    Catalog and dynamics are educational approximations, not navigation data.
    ========================================================================== */
 
-const APP_VERSION = "2.5.2-docked-crew-transfer-v17";
+const APP_VERSION = "2.6.0-lunar-capability-v18";
 const SAVE_SCHEMA_VERSION = 7;
 const CATALOG_VERSION = "Flattened J2000 / enhanced belt and surface catalog 2025-B";
 const BUILD_NAME = "Eight-Part Monolith";
@@ -13782,6 +13782,94 @@ definePart({
     "A high-thrust first-stage engine for heavy launch vehicles."
 });
 
+/* SOLAR_LUNAR_ENGINES_V18_BEGIN */
+
+definePart({
+  id: "engine-saturn-f1",
+  name: "Saturn F-1 Class Engine",
+  category: "propulsion",
+  kind: "engine",
+  manufacturer: "Saturn Propulsion Works",
+  width: 2.5,
+  height: 5.6,
+  dryMass: 8_400,
+  dragCoefficient: 0.48,
+  maxTemperature: 2_700,
+  thermalMass: 1_200_000,
+  crashTolerance: 7,
+  color: "#b9c0c4",
+  color2: "#2d353c",
+  accent: "#ff9b4d",
+  engine: {
+    /*
+     * The stored thrust is the vacuum value. The existing pressure model
+     * produces approximately 6.72 MN at Earth sea level from these Isp
+     * values, close to the historical F-1 class.
+     */
+    thrust: 7_770_000,
+    ispSea: 263,
+    ispVac: 304,
+    throttleable: true,
+    /*
+     * Limited throttling is used instead of making the liquid engine behave
+     * like an unthrottleable solid motor in the existing control model.
+     */
+    minThrottle: 0.55,
+    gimbal: 6 * DEG,
+    fuelRatios: {
+      liquidFuel: 0.45,
+      oxidizer: 0.55
+    },
+    ignitionLimit: 1
+  },
+  description:
+    "A Saturn V F-1-class first-stage engine. It delivers several meganewtons of launch thrust at the cost of substantial mass, limited throttling, and a single ignition."
+});
+
+definePart({
+  id: "engine-prometheus-ntr",
+  name: "Prometheus NTR-250",
+  category: "propulsion",
+  kind: "engineVacuum",
+  manufacturer: "Prometheus Nuclear Systems",
+  width: 2.5,
+  height: 4.6,
+  dryMass: 10_500,
+  dragCoefficient: 0.52,
+  maxTemperature: 2_650,
+  thermalMass: 1_600_000,
+  crashTolerance: 7,
+  color: "#aebbc2",
+  color2: "#273640",
+  accent: "#bd8cff",
+  engine: {
+    thrust: 250_000,
+    ispSea: 25,
+    ispVac: 900,
+    throttleable: true,
+    minThrottle: 0.08,
+    gimbal: 3 * DEG,
+    fuelRatios: {
+      /*
+       * Solar Program represents the hydrogen-rich and oxygen-assisted
+       * propellant streams through its common LFO resource abstraction.
+       */
+      liquidFuel: 0.45,
+      oxidizer: 0.55
+    },
+    ignitionLimit: Infinity,
+    /*
+     * The high-expansion nuclear nozzle is deliberately ineffective in a
+     * one-atmosphere environment. Existing engines continue to use 0.18.
+     */
+    minimumThrustFactor: 0.02
+  },
+  description:
+    "A heavy, NERVA-derived solid-core nuclear thermal transfer engine. It provides exceptional vacuum specific impulse and modest vacuum thrust, but its high-expansion nozzle is effectively unusable at Earth sea level."
+});
+
+/* SOLAR_LUNAR_ENGINES_V18_END */
+
 definePart({
   id: "srb-sparrow",
   name: "Sparrow Solid Booster",
@@ -13946,6 +14034,56 @@ definePart({
   description:
     "A high-capacity wide-body propellant tank for heavy launch vehicles."
 });
+
+/* SOLAR_LUNAR_TANKS_V18_BEGIN */
+
+definePart({
+  id: "tank-lfo-wide-2x",
+  name: "LFO-2400 Extended Wide Tank",
+  category: "fuel",
+  kind: "tankWide",
+  width: 2.5,
+  height: 6.4,
+  dryMass: 2_380,
+  dragCoefficient: 0.34,
+  maxTemperature: 1_075,
+  thermalMass: 780_000,
+  crashTolerance: 11,
+  color: "#d7dadb",
+  color2: "#596166",
+  accent: "#52b0ed",
+  resources: {
+    liquidFuel: 1_080,
+    oxidizer: 1_320
+  },
+  description:
+    "A double-length wide-body propellant tank with exactly twice the height, dry mass, and capacity of the LFO-1200 Wide Tank."
+});
+
+definePart({
+  id: "tank-lfo-wide-3x",
+  name: "LFO-3600 Triple Wide Tank",
+  category: "fuel",
+  kind: "tankWide",
+  width: 2.5,
+  height: 9.6,
+  dryMass: 3_570,
+  dragCoefficient: 0.34,
+  maxTemperature: 1_075,
+  thermalMass: 1_170_000,
+  crashTolerance: 11,
+  color: "#d7dadb",
+  color2: "#555e63",
+  accent: "#48a9e7",
+  resources: {
+    liquidFuel: 1_620,
+    oxidizer: 1_980
+  },
+  description:
+    "A triple-length wide-body propellant tank with exactly three times the height, dry mass, and capacity of the LFO-1200 Wide Tank."
+});
+
+/* SOLAR_LUNAR_TANKS_V18_END */
 
 definePart({
   id: "tank-lfo-lander",
@@ -17117,8 +17255,24 @@ function enginePerformanceAtPressure(engine, pressure) {
     engine.ispSea,
     normalizedPressure
   );
+  /* SOLAR_ENGINE_PRESSURE_FLOOR_V18_BEGIN
+     Existing engines retain the historical 0.18 floor. Specialized engines
+     may opt into a lower atmospheric thrust floor without affecting any
+     existing vehicle. */
+  const minimumThrustFactor = clamp(
+    Number.isFinite(Number(engine.minimumThrustFactor))
+      ? Number(engine.minimumThrustFactor)
+      : 0.18,
+    0,
+    1
+  );
   const thrust = engine.thrust *
-    clamp(isp / Math.max(1, engine.ispVac), 0.18, 1);
+    clamp(
+      isp / Math.max(1, engine.ispVac),
+      minimumThrustFactor,
+      1
+    );
+  /* SOLAR_ENGINE_PRESSURE_FLOOR_V18_END */
 
   return {
     isp,
@@ -56220,6 +56374,8 @@ launchCurrentRocket = async function launchCurrentRocketSasOff() {
         : run.world.bodies[index];
     }
 
+    /* SOLAR_CENTRAL_TARGET_WORKER_RESIDUAL_V18_BEGIN */
+
     function transferResidual(
       run,
       payload,
@@ -56253,23 +56409,60 @@ launchCurrentRocket = async function launchCurrentRocketSasOff() {
         run.world.vessel.vy -
         target.vy;
 
-      const perpendicular =
-        normalized(
-          -relativeVy,
-          relativeVx,
-          -relativeY,
-          relativeX
+      const rawAimX =
+        Number(
+          payload.arrivalAimX
         );
 
-      const desiredX =
-        perpendicular.x *
-        payload.arrivalRadius *
-        side;
+      const rawAimY =
+        Number(
+          payload.arrivalAimY
+        );
 
-      const desiredY =
-        perpendicular.y *
-        payload.arrivalRadius *
-        side;
+      const fixedAimLength =
+        Number.isFinite(rawAimX) &&
+        Number.isFinite(rawAimY)
+          ? hypot2(
+              rawAimX,
+              rawAimY
+            )
+          : 0;
+
+      let desiredX;
+      let desiredY;
+      let usesFixedAimV18 = false;
+
+      if (fixedAimLength > 1e-12) {
+        desiredX =
+          rawAimX /
+          fixedAimLength *
+          payload.arrivalRadius;
+
+        desiredY =
+          rawAimY /
+          fixedAimLength *
+          payload.arrivalRadius;
+
+        usesFixedAimV18 = true;
+      } else {
+        const perpendicular =
+          normalized(
+            -relativeVy,
+            relativeVx,
+            -relativeY,
+            relativeX
+          );
+
+        desiredX =
+          perpendicular.x *
+          payload.arrivalRadius *
+          side;
+
+        desiredY =
+          perpendicular.y *
+          payload.arrivalRadius *
+          side;
+      }
 
       return {
         x:
@@ -56291,9 +56484,12 @@ launchCurrentRocket = async function launchCurrentRocketSasOff() {
         relativeVy,
         desiredX,
         desiredY,
+        usesFixedAimV18,
         target
       };
     }
+
+    /* SOLAR_CENTRAL_TARGET_WORKER_RESIDUAL_V18_END */
 
     function makeTransferEvent(
       payload,
@@ -58034,6 +58230,8 @@ launchCurrentRocket = async function launchCurrentRocketSasOff() {
       : 0.05;
   }
 
+  /* SOLAR_CENTRAL_TARGET_DEFAULTS_V18_BEGIN */
+
   function defaultTransferParametersV9(
     vessel,
     target
@@ -58084,39 +58282,6 @@ launchCurrentRocket = async function launchCurrentRocketSasOff() {
         commonState.y
       );
 
-    const transferAxis =
-      (
-        sourceRadius +
-        targetRadius
-      ) * 0.5;
-
-    const hohmannTime =
-      Math.PI *
-      Math.sqrt(
-        transferAxis ** 3 /
-        gravitationalParameter(
-          common
-        )
-      );
-
-    const targetPeriod =
-      bodyOrbitalPeriod(target);
-
-    const departureWindow =
-      Number.isFinite(
-        targetPeriod
-      )
-        ? clamp(
-            targetPeriod,
-            DAY,
-            3 * YEAR
-          )
-        : clamp(
-            hohmannTime * 3,
-            7 * DAY,
-            3 * YEAR
-          );
-
     const atmosphereHeight =
       target.atmosphere?.height || 0;
 
@@ -58141,6 +58306,116 @@ launchCurrentRocket = async function launchCurrentRocketSasOff() {
             terrain * 3
           );
 
+    const arrivalRadius =
+      target.radius +
+      safeAltitude;
+
+    const centralTargetReturnV18 =
+      common.id === target.id;
+
+    /*
+     * For a parent-body return, targetRadius is mathematically zero because
+     * the common primary and target are the same object. Use the requested
+     * target-centered arrival radius for the transfer-time estimate.
+     */
+    const effectiveTargetRadius =
+      centralTargetReturnV18
+        ? arrivalRadius
+        : Math.max(1, targetRadius);
+
+    const transferAxis =
+      Math.max(
+        1,
+        (
+          sourceRadius +
+          effectiveTargetRadius
+        ) * 0.5
+      );
+
+    const hohmannTime =
+      Math.PI *
+      Math.sqrt(
+        transferAxis ** 3 /
+        gravitationalParameter(
+          common
+        )
+      );
+
+    let departureWindow;
+
+    if (centralTargetReturnV18) {
+      const sourceReference =
+        getBody(
+          vessel.referenceBodyId
+        ) ||
+        findReferenceBody(vessel);
+
+      const sourceOrbit =
+        sourceReference
+          ? orbitalElementsForObject(
+              vessel,
+              sourceReference
+            )
+          : null;
+
+      const sourceLocalPeriod =
+        sourceOrbit?.period;
+
+      const sourceBodyPeriod =
+        sourceReference
+          ? bodyOrbitalPeriod(
+              sourceReference
+            )
+          : Infinity;
+
+      const returnSearchPeriod =
+        Number.isFinite(
+          sourceLocalPeriod
+        ) &&
+        sourceLocalPeriod > 0
+          ? sourceLocalPeriod
+          : sourceBodyPeriod;
+
+      /*
+       * One local orbital period is enough to expose the useful departure
+       * geometries for a lunar-orbit or moon-orbit return. This avoids using
+       * the target planet's solar year as the default return search window.
+       */
+      departureWindow =
+        Number.isFinite(
+          returnSearchPeriod
+        ) &&
+        returnSearchPeriod > 0
+          ? clamp(
+              returnSearchPeriod,
+              30 * 60,
+              45 * DAY
+            )
+          : clamp(
+              hohmannTime * 2,
+              DAY,
+              45 * DAY
+            );
+    } else {
+      const targetPeriod =
+        bodyOrbitalPeriod(target);
+
+      departureWindow =
+        Number.isFinite(
+          targetPeriod
+        )
+          ? clamp(
+              targetPeriod,
+              DAY,
+              3 * YEAR
+            )
+          : clamp(
+              hohmannTime * 3,
+              7 * DAY,
+              3 * YEAR
+            );
+    }
+
     return {
       common,
       hohmannTime,
@@ -58155,9 +58430,166 @@ launchCurrentRocket = async function launchCurrentRocketSasOff() {
           1_200,
           hohmannTime * 1.65
         ),
-      safeAltitude
+      safeAltitude,
+      arrivalRadius,
+      centralTargetReturnV18
     };
   }
+
+  function centralTargetAimUnitsV18(
+    departureRadiusVector
+  ) {
+    const radial =
+      normalized(
+        departureRadiusVector.x,
+        departureRadiusVector.y
+      );
+
+    const antipode = {
+      x: -radial.x,
+      y: -radial.y
+    };
+
+    /*
+     * An exact 180-degree Lambert transfer is singular in the current
+     * universal-variable formulation. These leading and trailing periapsis
+     * aim points remain close to the low-energy antipode while avoiding that
+     * singularity.
+     */
+    return [
+      -28 * DEG,
+      -8 * DEG,
+      8 * DEG,
+      28 * DEG
+    ].map(angle =>
+      rotateVector(
+        antipode.x,
+        antipode.y,
+        angle
+      )
+    );
+  }
+
+  function centralReturnPatchedConicSeedV18(
+    departureRadiusVector,
+    departureVelocityRelative,
+    arrivalRadius,
+    mu,
+    direction
+  ) {
+    const departureRadius =
+      hypot2(
+        departureRadiusVector.x,
+        departureRadiusVector.y
+      );
+
+    if (
+      departureRadius <= 0 ||
+      arrivalRadius <= 0 ||
+      mu <= 0
+    ) {
+      return null;
+    }
+
+    const semiMajorAxis =
+      (
+        departureRadius +
+        arrivalRadius
+      ) * 0.5;
+
+    const departureSpeedSquared =
+      mu *
+      (
+        2 / departureRadius -
+        1 / semiMajorAxis
+      );
+
+    const arrivalSpeedSquared =
+      mu *
+      (
+        2 / arrivalRadius -
+        1 / semiMajorAxis
+      );
+
+    if (
+      departureSpeedSquared <= 0 ||
+      arrivalSpeedSquared <= 0
+    ) {
+      return null;
+    }
+
+    const radial =
+      normalized(
+        departureRadiusVector.x,
+        departureRadiusVector.y
+      );
+
+    const tangent =
+      direction >= 0
+        ? {
+            x: -radial.y,
+            y: radial.x
+          }
+        : {
+            x: radial.y,
+            y: -radial.x
+          };
+
+    const transferDepartureSpeed =
+      Math.sqrt(
+        departureSpeedSquared
+      );
+
+    const transferArrivalSpeed =
+      Math.sqrt(
+        arrivalSpeedSquared
+      );
+
+    const desiredVelocityRelative = {
+      x:
+        tangent.x *
+        transferDepartureSpeed,
+      y:
+        tangent.y *
+        transferDepartureSpeed
+    };
+
+    const dv = {
+      x:
+        desiredVelocityRelative.x -
+        departureVelocityRelative.x,
+      y:
+        desiredVelocityRelative.y -
+        departureVelocityRelative.y
+    };
+
+    const timeOfFlight =
+      Math.PI *
+      Math.sqrt(
+        semiMajorAxis ** 3 /
+        mu
+      );
+
+    return {
+      dv,
+      deltaV:
+        hypot2(
+          dv.x,
+          dv.y
+        ),
+      timeOfFlight,
+      arrivalRelativeSpeed:
+        transferArrivalSpeed,
+      arrivalAimUnitV18: {
+        x: -radial.x,
+        y: -radial.y
+      }
+    };
+  }
+
+  /* SOLAR_CENTRAL_TARGET_DEFAULTS_V18_END */
+
+  /* SOLAR_CENTRAL_TARGET_COARSE_SEARCH_V18_BEGIN */
 
   async function coarseTransferSearchV9(
     vessel,
@@ -58179,6 +58611,16 @@ launchCurrentRocket = async function launchCurrentRocketSasOff() {
     const mu =
       gravitationalParameter(
         common
+      );
+
+    const centralTargetReturnV18 =
+      common.id === target.id;
+
+    const arrivalRadius =
+      Math.max(
+        target.radius + 1,
+        target.radius +
+        options.arrivalAltitude
       );
 
     const departureSamples = 26;
@@ -58260,6 +58702,68 @@ launchCurrentRocket = async function launchCurrentRocketSasOff() {
           ? 1
           : -1;
 
+      /*
+       * A physically grounded inward/outward Hohmann-like seed gives the
+       * n-body corrector a useful solution even if every near-antipodal
+       * Lambert branch is numerically awkward for a particular geometry.
+       */
+      if (centralTargetReturnV18) {
+        const patchedSeed =
+          centralReturnPatchedConicSeedV18(
+            r1,
+            departureVelocityRelative,
+            arrivalRadius,
+            mu,
+            direction
+          );
+
+        if (
+          patchedSeed &&
+          patchedSeed.timeOfFlight >=
+            options.minimumFlight &&
+          patchedSeed.timeOfFlight <=
+            options.maximumFlight
+        ) {
+          candidates.push({
+            delay,
+            timeOfFlight:
+              patchedSeed.timeOfFlight,
+            dv:
+              patchedSeed.dv,
+            deltaV:
+              patchedSeed.deltaV,
+            arrivalRelativeSpeed:
+              patchedSeed
+                .arrivalRelativeSpeed,
+            phase:
+              mod(
+                Math.atan2(
+                  patchedSeed
+                    .arrivalAimUnitV18
+                    .y,
+                  patchedSeed
+                    .arrivalAimUnitV18
+                    .x
+                ),
+                TWO_PI
+              ),
+            longWay: false,
+            centralTargetReturnV18:
+              true,
+            centralPatchedConicV18:
+              true,
+            arrivalAimUnitV18:
+              patchedSeed
+                .arrivalAimUnitV18,
+            score:
+              patchedSeed.deltaV +
+              patchedSeed
+                .arrivalRelativeSpeed *
+              0.16
+          });
+        }
+      }
+
       for (
         let flightIndex = 0;
         flightIndex <
@@ -58303,7 +58807,7 @@ launchCurrentRocket = async function launchCurrentRocketSasOff() {
             arrivalCache
           );
 
-        const r2 = {
+        const targetCenterR2 = {
           x:
             targetArrival.x -
             primaryArrival.x,
@@ -58312,108 +58816,155 @@ launchCurrentRocket = async function launchCurrentRocketSasOff() {
             primaryArrival.y
         };
 
-        for (const longWay of [
-          false,
-          true
-        ]) {
-          const solution =
-            solveLambertV9(
-              r1,
-              r2,
+        const arrivalAimUnitsV18 =
+          centralTargetReturnV18
+            ? centralTargetAimUnitsV18(
+                r1
+              )
+            : [null];
+
+        for (const arrivalAimUnitV18 of
+             arrivalAimUnitsV18) {
+          const r2 =
+            arrivalAimUnitV18
+              ? {
+                  x:
+                    arrivalAimUnitV18.x *
+                    arrivalRadius,
+                  y:
+                    arrivalAimUnitV18.y *
+                    arrivalRadius
+                }
+              : targetCenterR2;
+
+          for (const longWay of [
+            false,
+            true
+          ]) {
+            const solution =
+              solveLambertV9(
+                r1,
+                r2,
+                timeOfFlight,
+                mu,
+                direction,
+                longWay
+              );
+
+            if (!solution) continue;
+
+            const requiredVelocity = {
+              x:
+                primaryDeparture.vx +
+                solution.v1.x,
+              y:
+                primaryDeparture.vy +
+                solution.v1.y
+            };
+
+            const dv = {
+              x:
+                requiredVelocity.x -
+                departureState.vx,
+              y:
+                requiredVelocity.y -
+                departureState.vy
+            };
+
+            const arrivalVelocity = {
+              x:
+                primaryArrival.vx +
+                solution.v2.x,
+              y:
+                primaryArrival.vy +
+                solution.v2.y
+            };
+
+            const arrivalRelativeSpeed =
+              hypot2(
+                arrivalVelocity.x -
+                targetArrival.vx,
+                arrivalVelocity.y -
+                targetArrival.vy
+              );
+
+            const deltaV =
+              hypot2(
+                dv.x,
+                dv.y
+              );
+
+            if (
+              !Number.isFinite(
+                deltaV
+              ) ||
+              deltaV <= 0 ||
+              deltaV > 1e7
+            ) {
+              continue;
+            }
+
+            let phase;
+
+            if (arrivalAimUnitV18) {
+              phase =
+                mod(
+                  Math.atan2(
+                    arrivalAimUnitV18.y,
+                    arrivalAimUnitV18.x
+                  ),
+                  TWO_PI
+                );
+            } else {
+              const targetDepartureVector = {
+                x:
+                  targetAtDeparture.x -
+                  primaryDeparture.x,
+                y:
+                  targetAtDeparture.y -
+                  primaryDeparture.y
+              };
+
+              phase =
+                mod(
+                  Math.atan2(
+                    targetDepartureVector.y,
+                    targetDepartureVector.x
+                  ) -
+                  Math.atan2(
+                    r1.y,
+                    r1.x
+                  ),
+                  TWO_PI
+                );
+            }
+
+            candidates.push({
+              delay,
               timeOfFlight,
-              mu,
-              direction,
-              longWay
-            );
-
-          if (!solution) continue;
-
-          const requiredVelocity = {
-            x:
-              primaryDeparture.vx +
-              solution.v1.x,
-            y:
-              primaryDeparture.vy +
-              solution.v1.y
-          };
-
-          const dv = {
-            x:
-              requiredVelocity.x -
-              departureState.vx,
-            y:
-              requiredVelocity.y -
-              departureState.vy
-          };
-
-          const arrivalVelocity = {
-            x:
-              primaryArrival.vx +
-              solution.v2.x,
-            y:
-              primaryArrival.vy +
-              solution.v2.y
-          };
-
-          const arrivalRelativeSpeed =
-            hypot2(
-              arrivalVelocity.x -
-              targetArrival.vx,
-              arrivalVelocity.y -
-              targetArrival.vy
-            );
-
-          const deltaV =
-            hypot2(
-              dv.x,
-              dv.y
-            );
-
-          if (
-            !Number.isFinite(
-              deltaV
-            ) ||
-            deltaV <= 0 ||
-            deltaV > 1e7
-          ) {
-            continue;
+              dv,
+              deltaV,
+              arrivalRelativeSpeed,
+              phase,
+              longWay,
+              score:
+                deltaV +
+                arrivalRelativeSpeed *
+                0.16,
+              centralTargetReturnV18,
+              centralPatchedConicV18:
+                false,
+              arrivalAimUnitV18:
+                arrivalAimUnitV18
+                  ? {
+                      x:
+                        arrivalAimUnitV18.x,
+                      y:
+                        arrivalAimUnitV18.y
+                    }
+                  : null
+            });
           }
-
-          const targetDepartureVector = {
-            x:
-              targetAtDeparture.x -
-              primaryDeparture.x,
-            y:
-              targetAtDeparture.y -
-              primaryDeparture.y
-          };
-
-          const phase =
-            mod(
-              Math.atan2(
-                targetDepartureVector.y,
-                targetDepartureVector.x
-              ) -
-              Math.atan2(
-                r1.y,
-                r1.x
-              ),
-              TWO_PI
-            );
-
-          candidates.push({
-            delay,
-            timeOfFlight,
-            dv,
-            deltaV,
-            arrivalRelativeSpeed,
-            phase,
-            longWay,
-            score:
-              deltaV +
-              arrivalRelativeSpeed *
-              0.16
-          });
         }
       }
 
@@ -58431,16 +58982,28 @@ launchCurrentRocket = async function launchCurrentRocketSasOff() {
 
     if (!candidates.length) {
       throw new Error(
-        "No Lambert transfer was found in the selected departure and flight-time windows."
+        centralTargetReturnV18
+          ? "No target-centered return seed was found in the selected departure and flight-time windows."
+          : "No Lambert transfer was found in the selected departure and flight-time windows."
       );
     }
 
     return {
       common,
+      centralTargetReturnV18,
       candidates:
-        candidates.slice(0, 3)
+        candidates.slice(
+          0,
+          centralTargetReturnV18
+            ? 6
+            : 3
+        )
     };
   }
+
+  /* SOLAR_CENTRAL_TARGET_COARSE_SEARCH_V18_END */
+
+  /* SOLAR_CENTRAL_TARGET_SOLVE_V18_BEGIN */
 
   async function solveTransferV9(
     vessel,
@@ -58508,6 +59071,16 @@ launchCurrentRocket = async function launchCurrentRocketSasOff() {
           candidate.dv.y,
         arrivalSide:
           options.arrivalSide || 0,
+        /*
+         * For target-equals-common-primary returns, the worker targets this
+         * fixed nonzero periapsis point relative to the target. Normal
+         * outbound transfers leave both values null and retain the existing
+         * velocity-derived B-plane behavior.
+         */
+        arrivalAimX:
+          candidate.arrivalAimUnitV18?.x ?? null,
+        arrivalAimY:
+          candidate.arrivalAimUnitV18?.y ?? null,
         tolerance:
           Math.max(
             100,
@@ -58540,6 +59113,32 @@ launchCurrentRocket = async function launchCurrentRocketSasOff() {
 
       refined.capability =
         capability;
+
+      refined.centralTargetReturnV18 =
+        Boolean(
+          candidate
+            .centralTargetReturnV18
+        );
+
+      refined.centralPatchedConicV18 =
+        Boolean(
+          candidate
+            .centralPatchedConicV18
+        );
+
+      refined.arrivalAimUnitV18 =
+        candidate.arrivalAimUnitV18
+          ? {
+              x:
+                candidate
+                  .arrivalAimUnitV18
+                  .x,
+              y:
+                candidate
+                  .arrivalAimUnitV18
+                  .y
+            }
+          : null;
 
       const score =
         refined.deltaV +
@@ -58602,6 +59201,8 @@ launchCurrentRocket = async function launchCurrentRocketSasOff() {
 
     return best;
   }
+
+  /* SOLAR_CENTRAL_TARGET_SOLVE_V18_END */
 
   /* -----------------------------------------------------------------------
      Generic n-body node prediction
@@ -59478,6 +60079,20 @@ launchCurrentRocket = async function launchCurrentRocketSasOff() {
         result.arrivalMode,
       arrivalSide:
         result.side,
+      /* SOLAR_CENTRAL_TARGET_PLAN_AIM_V18 */
+      arrivalAimUnitV18:
+        result.arrivalAimUnitV18
+          ? {
+              x:
+                result.arrivalAimUnitV18.x,
+              y:
+                result.arrivalAimUnitV18.y
+            }
+          : null,
+      centralTargetReturnV18:
+        Boolean(
+          result.centralTargetReturnV18
+        ),
       autoCorrection:
         Boolean(
           result.autoCorrection
@@ -59633,6 +60248,11 @@ launchCurrentRocket = async function launchCurrentRocketSasOff() {
         initialDvy: 0,
         arrivalSide:
           plan.arrivalSide,
+        /* SOLAR_CENTRAL_TARGET_CORRECTION_AIM_V18 */
+        arrivalAimX:
+          plan.arrivalAimUnitV18?.x ?? null,
+        arrivalAimY:
+          plan.arrivalAimUnitV18?.y ?? null,
         tolerance:
           Math.max(
             50,
@@ -60040,8 +60660,9 @@ launchCurrentRocket = async function launchCurrentRocketSasOff() {
         id="transferPlannerStatusV9"
         class="transferPlannerStatusV9"
       >
-        Ready to search. The approximately 114° Earth–Moon phase angle
-        is not hard-coded; it will be derived from the live states.
+        Ready to search. Outbound routes use live-state Lambert geometry.
+        Parent-body returns use a non-singular target-centered arrival
+        aim point and the same n-body correction model.
       </div>
 
       <div class="transferPlannerActionsV9">
@@ -60224,7 +60845,7 @@ launchCurrentRocket = async function launchCurrentRocketSasOff() {
               <span>Flight time</span>
               <span>${escapeHtml(formatDuration(result.seed.timeOfFlight, false))}</span>
 
-              <span>Departure phase</span>
+              <span>${result.centralTargetReturnV18 ? "Arrival aim angle" : "Departure phase"}</span>
               <span>${phaseDegrees.toFixed(1)}°</span>
 
               <span>Departure Δv</span>
@@ -66555,6 +67176,18 @@ launchCurrentRocket = async function launchCurrentRocketSasOff() {
       best: "First stages, heavy boosters, and high-mass launch stacks.",
       tradeoff: "Heavy, less deeply throttleable, and inefficient for tiny spacecraft."
     },
+    /* SOLAR_LUNAR_ENGINE_GUIDANCE_V18_BEGIN */
+    "engine-saturn-f1": {
+      purpose: "A Saturn V F-1-class liquid engine producing several meganewtons of launch thrust.",
+      best: "Very heavy first stages where one engine can replace a large cluster of Titan engines.",
+      tradeoff: "Extremely heavy, limited to one ignition, only partly throttleable, and much less efficient than a vacuum transfer engine."
+    },
+    "engine-prometheus-ntr": {
+      purpose: "A heavy nuclear thermal transfer engine with exceptional vacuum specific impulse.",
+      best: "Trans-lunar injection, deep-space transfers, high-delta-v upper stages, and vacuum-only propulsion.",
+      tradeoff: "Low thrust for its mass and effectively unusable at Earth sea level. Its LFO mixture is Solar Program's abstraction of a hydrogen-rich, oxygen-assisted nuclear propulsion system."
+    },
+    /* SOLAR_LUNAR_ENGINE_GUIDANCE_V18_END */
     "srb-sparrow": {
       purpose: "A compact solid rocket with built-in propellant and one ignition.",
       best: "Simple strap-on assistance and inexpensive first-stage thrust.",
@@ -66585,6 +67218,18 @@ launchCurrentRocket = async function launchCurrentRocketSasOff() {
       best: "Heavy first stages and large launch vehicles using wide engines or adapters.",
       tradeoff: "High wet mass and frontal area demand powerful engines and stable aerodynamics."
     },
+    /* SOLAR_LUNAR_TANK_GUIDANCE_V18_BEGIN */
+    "tank-lfo-wide-2x": {
+      purpose: "A double-length wide tank storing twice the propellant of the LFO-1200.",
+      best: "Reducing part count in large launch stages while preserving the original wide-tank mass fraction.",
+      tradeoff: "Its greater length and wet mass require adequate thrust, structural planning, and aerodynamic stability."
+    },
+    "tank-lfo-wide-3x": {
+      purpose: "A triple-length wide tank storing three times the propellant of the LFO-1200.",
+      best: "Very large first stages and transfer stages where minimizing tank part count is important.",
+      tradeoff: "A single tank carries substantial wet mass and creates a long vehicle section that needs sufficient control authority."
+    },
+    /* SOLAR_LUNAR_TANK_GUIDANCE_V18_END */
     "tank-lfo-lander": {
       purpose: "A squat liquid propellant tank designed for compact vehicles.",
       best: "Low-profile landers and small maneuvering stages.",
