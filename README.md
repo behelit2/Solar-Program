@@ -446,7 +446,7 @@ Makemake,
 Eris,
 all 425 modeled moons,
 all 109 modeled asteroids,
-and all 15 modeled comets
+and all 15 modeled comets.
 
 558 landable objects, total.
 
