@@ -18372,7 +18372,6 @@ function activateNextStage(vessel) {
   }
 
   const decouplers = [];
-  const stagedParachutesV20 = [];
   let activated = 0;
 
   for (const part of stageParts) {
@@ -18399,7 +18398,7 @@ function activateNextStage(vessel) {
     }
 
     if (definition.parachute) {
-      stagedParachutesV20.push(part);
+      attemptParachuteDeployment(vessel);
       activated += 1;
     }
 
@@ -18412,21 +18411,6 @@ function activateNextStage(vessel) {
       part.antennaDeployed = true;
       activated += 1;
     }
-  }
-
-  /*
-   * SOLAR_ROUND_TRIP_FIX_V20
-   *
-   * A stage is one parachute command, regardless of how many parachute
-   * parts it contains. Passing the explicit part array also prevents a
-   * parachute stage from operating chutes assigned to another stage.
-   */
-  if (stagedParachutesV20.length) {
-    attemptParachuteDeployment(
-      vessel,
-      false,
-      stagedParachutesV20
-    );
   }
 
   vessel.stageIndex += 1;
@@ -41913,18 +41897,7 @@ runtime.flightStabilityPatchV51 = true;
     return topology;
   }
 
-  /*
-   * SOLAR_ROUND_TRIP_FIX_V20
-   *
-   * Preserve the existing same-stage routing as the primary route. Only if
-   * no physically reachable compatible tank capacity is assigned to the
-   * engine's stage do we fall back to another stage in the same valid
-   * crossfeed topology.
-   *
-   * crossfeed:false boundaries and directed fuel-duct direction remain
-   * authoritative.
-   */
-  function fuelRouteForEngineV20(
+  function fuelCandidatesForEngineV53(
     vessel,
     enginePart,
     resourceId
@@ -41936,30 +41909,11 @@ runtime.flightStabilityPatchV51 = true;
         "solidFuel"
       )
     ) {
-      return {
-        candidates: [enginePart],
-        crossStageFallback: false,
-        engineStage:
-          Math.max(
-            0,
-            Math.round(
-              Number(enginePart.stage) || 0
-            )
-          ),
-        sourceStages: [
-          Math.max(
-            0,
-            Math.round(
-              Number(enginePart.stage) || 0
-            )
-          )
-        ]
-      };
+      return [enginePart];
     }
 
     const topology =
       buildFuelTopologyV53(vessel);
-
     const engineStage =
       Math.max(
         0,
@@ -41967,7 +41921,6 @@ runtime.flightStabilityPatchV51 = true;
           Number(enginePart.stage) || 0
         )
       );
-
     const componentIndex =
       topology.componentByPartId.get(
         enginePart.id
@@ -41976,76 +41929,34 @@ runtime.flightStabilityPatchV51 = true;
     if (
       componentIndex === undefined
     ) {
-      return {
-        candidates: [],
-        crossStageFallback: false,
-        engineStage,
-        sourceStages: []
-      };
+      return [];
     }
 
     const component =
       topology.components[
         componentIndex
       ] || [];
-
-    /*
-     * Preserve component order so correctly staged craft keep the same drain
-     * order they had before this patch.
-     */
-    const localTanks =
-      component.filter(part => (
+    const localTanks = component
+      .filter(part => (
         isFuelTankPartV53(part) &&
-        Math.max(
-          0,
-          Number(
-            part.resources
-              ?.[resourceId]
-              ?.capacity
-          ) || 0
-        ) > 0
-      ));
-
-    const primaryLocalTanks =
-      localTanks.filter(part =>
         partResourceStageV53(part) ===
           engineStage
-      );
-
-    const fallbackLocalTanks =
-      localTanks.filter(part =>
-        partResourceStageV53(part) !==
-          engineStage
+      ))
+      .sort((a, b) =>
+        a.id.localeCompare(b.id)
       );
 
     const result = [];
     const added = new Set();
     const activePath = new Set();
 
-    function addTank(
-      part,
-      allowCrossStage
-    ) {
+    function addTank(part) {
       if (
         !part ||
         added.has(part.id) ||
-        !part.resources?.[resourceId] ||
-        Math.max(
-          0,
-          Number(
-            part.resources[
-              resourceId
-            ].capacity
-          ) || 0
-        ) <= 0
-      ) {
-        return;
-      }
-
-      if (
-        !allowCrossStage &&
         partResourceStageV53(part) !==
-          engineStage
+          engineStage ||
+        !part.resources?.[resourceId]
       ) {
         return;
       }
@@ -42054,10 +41965,7 @@ runtime.flightStabilityPatchV51 = true;
       result.push(part);
     }
 
-    function addIncomingSources(
-      targetTank,
-      allowCrossStage
-    ) {
+    function addIncomingSources(targetTank) {
       if (
         !targetTank ||
         activePath.has(targetTank.id)
@@ -42065,9 +41973,7 @@ runtime.flightStabilityPatchV51 = true;
         return;
       }
 
-      activePath.add(
-        targetTank.id
-      );
+      activePath.add(targetTank.id);
 
       for (const duct of topology.ducts) {
         if (
@@ -42081,7 +41987,6 @@ runtime.flightStabilityPatchV51 = true;
           topology.partMap.get(
             duct.fuelLineSourceIdV53
           );
-
         const target =
           topology.partMap.get(
             duct.fuelLineTargetIdV53
@@ -42090,6 +41995,10 @@ runtime.flightStabilityPatchV51 = true;
         if (
           !source ||
           !target ||
+          partResourceStageV53(source) !==
+            engineStage ||
+          partResourceStageV53(target) !==
+            engineStage ||
           !sharedDuctResourcesV53(
             source,
             target
@@ -42098,114 +42007,26 @@ runtime.flightStabilityPatchV51 = true;
           continue;
         }
 
-        if (
-          !allowCrossStage &&
-          (
-            partResourceStageV53(source) !==
-              engineStage ||
-            partResourceStageV53(target) !==
-              engineStage
-          )
-        ) {
-          continue;
-        }
-
         /*
-         * Follow only incoming directed ducts. Never introduce reverse flow.
+         * Recursively honor ducts feeding this source tank. The active-path
+         * guard rejects cycles without allowing reverse flow.
          */
-        addIncomingSources(
-          source,
-          allowCrossStage
-        );
-
-        addTank(
-          source,
-          allowCrossStage
-        );
+        addIncomingSources(source);
+        addTank(source);
       }
 
-      activePath.delete(
-        targetTank.id
-      );
+      activePath.delete(targetTank.id);
     }
 
-    /*
-     * First reproduce the original same-stage route exactly.
-     */
-    for (const tank of primaryLocalTanks) {
-      addIncomingSources(
-        tank,
-        false
-      );
+    for (const tank of localTanks) {
+      addIncomingSources(tank);
     }
 
-    for (const tank of primaryLocalTanks) {
-      addTank(
-        tank,
-        false
-      );
+    for (const tank of localTanks) {
+      addTank(tank);
     }
 
-    const primaryCount =
-      result.length;
-
-    /*
-     * Do not use another stage merely because a correctly assigned tank ran
-     * dry. The fallback is only for a complete stage-assignment mismatch:
-     * no compatible same-stage tank capacity exists at all.
-     */
-    if (primaryCount === 0) {
-      for (const tank of [
-        ...primaryLocalTanks,
-        ...fallbackLocalTanks
-      ]) {
-        addIncomingSources(
-          tank,
-          true
-        );
-      }
-
-      for (const tank of [
-        ...primaryLocalTanks,
-        ...fallbackLocalTanks
-      ]) {
-        addTank(
-          tank,
-          true
-        );
-      }
-    }
-
-    return {
-      candidates: result,
-
-      crossStageFallback:
-        primaryCount === 0 &&
-        result.length > 0,
-
-      engineStage,
-
-      sourceStages:
-        [
-          ...new Set(
-            result.map(part =>
-              partResourceStageV53(part)
-            )
-          )
-        ]
-    };
-  }
-
-  function fuelCandidatesForEngineV53(
-    vessel,
-    enginePart,
-    resourceId
-  ) {
-    return fuelRouteForEngineV20(
-      vessel,
-      enginePart,
-      resourceId
-    ).candidates;
+    return result;
   }
 
   function virtualResourceKeyV53(
@@ -42350,7 +42171,9 @@ runtime.flightStabilityPatchV51 = true;
            fuelRatios || {}
          )) {
       const density =
-        RESOURCE_INFO[resourceId]?.density || 1;
+        RESOURCE_INFO[
+          resourceId
+        ]?.density || 1;
 
       ratioMassTotal +=
         Math.max(0, ratio) *
@@ -42367,8 +42190,9 @@ runtime.flightStabilityPatchV51 = true;
            fuelRatios || {}
          )) {
       const density =
-        RESOURCE_INFO[resourceId]?.density || 1;
-
+        RESOURCE_INFO[
+          resourceId
+        ]?.density || 1;
       const resourceMass =
         requestedMass *
         (
@@ -42376,21 +42200,14 @@ runtime.flightStabilityPatchV51 = true;
           density /
           ratioMassTotal
         );
-
       const requestedUnits =
-        resourceMass /
-        density;
-
-      const route =
-        fuelRouteForEngineV20(
+        resourceMass / density;
+      const candidates =
+        fuelCandidatesForEngineV53(
           vessel,
           enginePart,
           resourceId
         );
-
-      const candidates =
-        route.candidates;
-
       let available = 0;
 
       for (const candidate of candidates) {
@@ -42413,17 +42230,12 @@ runtime.flightStabilityPatchV51 = true;
       requests.push({
         resourceId,
         requestedUnits,
-        candidates,
-        route
+        candidates
       });
     }
 
     fulfillment =
       saturate(fulfillment);
-
-    let fallbackUnitsUsedV20 = 0;
-    const fallbackStagesV20 =
-      new Set();
 
     for (const request of requests) {
       let remaining =
@@ -42442,7 +42254,6 @@ runtime.flightStabilityPatchV51 = true;
             request.resourceId,
             virtualAmounts
           );
-
         const transfer =
           Math.min(
             available,
@@ -42467,105 +42278,9 @@ runtime.flightStabilityPatchV51 = true;
             request.resourceId,
             transfer
           );
-
-          if (
-            request.route
-              .crossStageFallback
-          ) {
-            fallbackUnitsUsedV20 +=
-              transfer;
-
-            fallbackStagesV20.add(
-              partResourceStageV53(
-                tank
-              )
-            );
-          }
         }
 
         remaining -= transfer;
-      }
-    }
-
-    if (
-      mutate &&
-      !virtualAmounts &&
-      fallbackUnitsUsedV20 > 0
-    ) {
-      enginePart.runtime ||=
-        Object.create(null);
-
-      const engineStage =
-        Math.max(
-          0,
-          Math.round(
-            Number(enginePart.stage) || 0
-          )
-        );
-
-      const sourceStages =
-        [...fallbackStagesV20]
-          .filter(stage =>
-            stage !== engineStage
-          )
-          .sort((a, b) =>
-            a - b
-          );
-
-      const diagnostic = {
-        time: sim.time,
-        enginePartId:
-          enginePart.id,
-        engineStage,
-        sourceStages,
-        unitsUsed:
-          fallbackUnitsUsedV20
-      };
-
-      enginePart.runtime
-        .crossStageFuelFallbackV20 =
-        diagnostic;
-
-      vessel.lastCrossStageFuelFallbackV20 =
-        diagnostic;
-
-      if (
-        !enginePart.runtime
-          .crossStageFuelNoticeV20
-      ) {
-        enginePart.runtime
-          .crossStageFuelNoticeV20 =
-          true;
-
-        if (
-          vessel.id ===
-            sim.activeVesselId
-        ) {
-          const engineName =
-            partNameV53(
-              enginePart
-            );
-
-          const sourceText =
-            sourceStages.length
-              ? (
-                  "Stage " +
-                  sourceStages.join(
-                    " / Stage "
-                  )
-                )
-              : "another fuel stage";
-
-          queueDeferredAction(
-            () => {
-              toast(
-                `${engineName} is using physically connected fuel assigned to ${sourceText}; its engine is in Stage ${engineStage}.`,
-                "warn",
-                5200
-              );
-            }
-          );
-        }
       }
     }
 
@@ -44581,9 +44296,6 @@ runtime.flightStabilityPatchV51 = true;
       parts: vab.parts
     };
 
-    const warnedFallbackEnginesV20 =
-      new Set();
-
     for (const enginePart of
          vab.parts.filter(part =>
            Boolean(
@@ -44600,49 +44312,16 @@ runtime.flightStabilityPatchV51 = true;
            Object.keys(
              engine.fuelRatios || {}
            )) {
-        const route =
-          fuelRouteForEngineV20(
+        const candidates =
+          fuelCandidatesForEngineV53(
             pseudoVessel,
             enginePart,
             resourceId
           );
 
-        if (!route.candidates.length) {
+        if (!candidates.length) {
           validation.warnings.push(
             `${partNameV53(enginePart)} in Stage ${enginePart.stage} cannot reach ${titleCase(resourceId)}.`
-          );
-
-          continue;
-        }
-
-        if (
-          route.crossStageFallback &&
-          !warnedFallbackEnginesV20.has(
-            enginePart.id
-          )
-        ) {
-          warnedFallbackEnginesV20.add(
-            enginePart.id
-          );
-
-          const otherStages =
-            route.sourceStages
-              .filter(stage =>
-                stage !==
-                route.engineStage
-              )
-              .sort((a, b) =>
-                a - b
-              );
-
-          validation.warnings.push(
-            `${partNameV53(enginePart)} in Stage ${route.engineStage} has no compatible same-stage tank and will use physically connected fuel from ` +
-            (
-              otherStages.length
-                ? `Stage ${otherStages.join(" / Stage ")}`
-                : "another fuel stage"
-            ) +
-            ". Assign the tank to the engine stage if that fuel should appear in the same Stage Fuel row."
           );
         }
       }
@@ -49221,6 +48900,8 @@ launchCurrentRocket = async function launchCurrentRocketSasOff() {
    * Explicit selections reveal Vehicle information. EVA reveals Crew.
    * Taking control of a vessel reveals Flight.
    */
+  /* SOLAR_CAMERA_RELEASE_PANEL_FIX_V20_BEGIN */
+
   const selectObjectV7Base = selectObject;
 
   selectObject = function selectObjectPanelV7(
@@ -49229,27 +48910,15 @@ launchCurrentRocket = async function launchCurrentRocketSasOff() {
     openCard = true
   ) {
     /*
-     * SOLAR_ROUND_TRIP_FIX_V20
-     *
-     * Pressing the currently anchored object is a camera-anchor release,
-     * not a fresh request to reveal the Vehicle panel.
+     * The lower V4 selection layer uses a second press on the currently
+     * anchored object to release that anchor. A successful anchor release is
+     * not a new selection and must not resurrect the Vehicle panel.
      */
-    const sameAnchorBeforeV20 =
-      Boolean(
-        camera.anchor?.enabled &&
-        camera.anchor.type === type &&
-        camera.anchor.id === id
-      );
-
-    const selectionWasOpenV20 =
-      Boolean(
-        ui.selectionOpen
-      );
-
-    const selectionCardWasHiddenV20 =
-      dom.selectionCard.classList.contains(
-        "hidden"
-      );
+    const sameAnchorBeforeV20 = Boolean(
+      camera.anchor?.enabled &&
+      camera.anchor.type === type &&
+      camera.anchor.id === id
+    );
 
     const result = selectObjectV7Base(
       type,
@@ -49257,43 +48926,27 @@ launchCurrentRocket = async function launchCurrentRocketSasOff() {
       openCard
     );
 
-    const anchorReleasedV20 =
-      Boolean(
-        result &&
-        sameAnchorBeforeV20 &&
-        !(
-          camera.anchor?.enabled &&
-          camera.anchor.type === type &&
-          camera.anchor.id === id
-        )
-      );
-
-    if (anchorReleasedV20) {
-      /*
-       * If the user had already deselected the object by pressing empty
-       * canvas space, preserve that hidden state. Restoring it synchronously
-       * also prevents the dock MutationObserver from treating Vehicle as a
-       * newly available panel and reopening it.
-       *
-       * If Vehicle was already visible, leave it exactly as it was.
-       */
-      if (
-        !selectionWasOpenV20 ||
-        selectionCardWasHiddenV20
-      ) {
-        ui.selectionOpen = false;
-
-        dom.selectionCard.classList.add(
-          "hidden"
-        );
-      }
-
-      return result;
-    }
+    const releasedAnchorV20 = Boolean(
+      result &&
+      sameAnchorBeforeV20 &&
+      !(
+        camera.anchor?.enabled &&
+        camera.anchor.type === type &&
+        camera.anchor.id === id
+      )
+    );
 
     if (result) {
       setTimeout(() => {
         panelDockV7.sync();
+
+        /*
+         * Keep the tab and selection data synchronized, but leave the panel
+         * in its current docked/collapsed state after an anchor release.
+         */
+        if (releasedAnchorV20) {
+          return;
+        }
 
         if (type === "astronaut") {
           panelDockV7.open("crew");
@@ -49305,6 +48958,11 @@ launchCurrentRocket = async function launchCurrentRocketSasOff() {
 
     return result;
   };
+
+  runtime.cameraReleasePanelFixV20 = true;
+  runtime.cameraReleasePanelFixVersionV20 = "20.0";
+
+  /* SOLAR_CAMERA_RELEASE_PANEL_FIX_V20_END */
 
   const setActiveVesselV7Base = setActiveVessel;
 
@@ -59022,104 +58680,6 @@ launchCurrentRocket = async function launchCurrentRocketSasOff() {
 
   /* SOLAR_CENTRAL_TARGET_DEFAULTS_V18_BEGIN */
 
-  /*
-   * SOLAR_ROUND_TRIP_FIX_V20
-   *
-   * Return a target-derived altitude for the planner's Entry / Surface
-   * Approach mode. No body IDs are special-cased.
-   *
-   * Atmospheric bodies receive an entry-interface target strictly inside
-   * their modeled atmosphere. Airless bodies receive a terrain-clearing
-   * surface-approach target.
-   */
-  function recommendedEntryAltitudeV20(
-    vessel,
-    target
-  ) {
-    const terrain =
-      Math.max(
-        0,
-        finiteV9(
-          target?.terrainAmplitude
-        )
-      );
-
-    const vesselMargin =
-      Math.max(
-        50,
-        (
-          vessel?.aggregate?.extent ||
-          1
-        ) * 4
-      );
-
-    const surfaceApproach =
-      terrain +
-      Math.max(
-        100,
-        finiteV9(
-          target?.radius
-        ) * 0.001,
-        vesselMargin
-      );
-
-    const atmosphere =
-      target?.atmosphere;
-
-    const atmosphereHeight =
-      Math.max(
-        0,
-        finiteV9(
-          atmosphere?.height
-        )
-      );
-
-    if (atmosphereHeight <= 0) {
-      return surfaceApproach;
-    }
-
-    const scaleHeight =
-      Math.max(
-        0,
-        finiteV9(
-          atmosphere?.scaleHeight
-        )
-      );
-
-    /*
-     * Start near the conventional entry interface: at least one scale
-     * height or fifteen percent below the modeled atmosphere boundary.
-     * Clamp the result away from both the exact boundary and the surface.
-     */
-    const proposed =
-      atmosphereHeight -
-      Math.max(
-        atmosphereHeight * 0.15,
-        scaleHeight
-      );
-
-    const upper =
-      atmosphereHeight * 0.85;
-
-    const lower =
-      Math.min(
-        upper,
-        Math.max(
-          atmosphereHeight * 0.25,
-          Math.min(
-            surfaceApproach,
-            atmosphereHeight * 0.60
-          )
-        )
-      );
-
-    return clamp(
-      proposed,
-      lower,
-      upper
-    );
-  }
-
   function defaultTransferParametersV9(
     vessel,
     target
@@ -59319,11 +58879,6 @@ launchCurrentRocket = async function launchCurrentRocketSasOff() {
           hohmannTime * 1.65
         ),
       safeAltitude,
-      entryAltitude:
-        recommendedEntryAltitudeV20(
-          vessel,
-          target
-        ),
       arrivalRadius,
       centralTargetReturnV18
     };
@@ -60087,11 +59642,6 @@ launchCurrentRocket = async function launchCurrentRocketSasOff() {
     best.createCapture =
       options.createCapture;
 
-    best.autoStageOnFuelDepletionV19 =
-      Boolean(
-        options.autoStageOnFuelDepletionV19
-      );
-
     best.arrivalTime =
       sim.time +
       best.seed.delay +
@@ -60821,8 +60371,7 @@ launchCurrentRocket = async function launchCurrentRocketSasOff() {
       frameBodyId = null,
       relativePosition = null,
       targetBodyId = null,
-      transferPlanId = null,
-      autoStageOnFuelDepletionV19 = false
+      transferPlanId = null
     }
   ) {
     const node =
@@ -60835,11 +60384,7 @@ launchCurrentRocket = async function launchCurrentRocketSasOff() {
               time - sim.time
             ),
           prograde: 0,
-          radial: 0,
-          autoStageOnFuelDepletionV19:
-            Boolean(
-              autoStageOnFuelDepletionV19
-            )
+          radial: 0
         }
       );
 
@@ -60874,15 +60419,6 @@ launchCurrentRocket = async function launchCurrentRocketSasOff() {
 
     node.solverManagedV9 =
       true;
-
-    /*
-     * Solver-managed nodes cannot use the ordinary V19 editor, so the
-     * transfer planner must set this option at creation time.
-     */
-    node.autoStageOnFuelDepletionV19 =
-      Boolean(
-        autoStageOnFuelDepletionV19
-      );
 
     node.executionStateV8 =
       "planned";
@@ -61048,11 +60584,7 @@ launchCurrentRocket = async function launchCurrentRocketSasOff() {
           targetBodyId:
             target.id,
           transferPlanId:
-            planId,
-          autoStageOnFuelDepletionV19:
-            Boolean(
-              result.autoStageOnFuelDepletionV19
-            )
+            planId
         }
       );
 
@@ -61107,11 +60639,7 @@ launchCurrentRocket = async function launchCurrentRocketSasOff() {
               targetBodyId:
                 target.id,
               transferPlanId:
-                planId,
-              autoStageOnFuelDepletionV19:
-                Boolean(
-                  result.autoStageOnFuelDepletionV19
-                )
+                planId
             }
           );
       }
@@ -61158,10 +60686,6 @@ launchCurrentRocket = async function launchCurrentRocketSasOff() {
       autoCorrection:
         Boolean(
           result.autoCorrection
-        ),
-      autoStageOnFuelDepletionV19:
-        Boolean(
-          result.autoStageOnFuelDepletionV19
         ),
       correctionAttempted:
         false,
@@ -61388,11 +60912,7 @@ launchCurrentRocket = async function launchCurrentRocketSasOff() {
               targetBodyId:
                 target.id,
               transferPlanId:
-                plan.id,
-              autoStageOnFuelDepletionV19:
-                Boolean(
-                  plan.autoStageOnFuelDepletionV19
-                )
+                plan.id
             }
           );
 
@@ -61591,6 +61111,153 @@ launchCurrentRocket = async function launchCurrentRocketSasOff() {
      Transfer-planner UI
      ----------------------------------------------------------------------- */
 
+  /* SOLAR_ENTRY_MODE_DEFAULT_V20_BEGIN */
+
+  /*
+   * Return a conservative terrain-clearing altitude for a direct surface
+   * approach. The calculation is body-generic and intentionally uses no
+   * Earth-, Moon-, or mission-specific IDs.
+   */
+  function transferTerrainClearanceV20(
+    vessel,
+    target
+  ) {
+    const terrainAmplitude = Math.max(
+      0,
+      finiteV9(
+        target?.terrainAmplitude
+      )
+    );
+
+    const targetRadius = Math.max(
+      1,
+      finiteV9(
+        target?.radius,
+        1
+      )
+    );
+
+    const vesselExtent = Math.max(
+      1,
+      finiteV9(
+        vessel?.aggregate?.extent,
+        1
+      )
+    );
+
+    const clearanceMargin = Math.max(
+      100,
+      targetRadius * 0.001,
+      vesselExtent * 2
+    );
+
+    return (
+      terrainAmplitude +
+      clearanceMargin
+    );
+  }
+
+  /*
+   * Orbit and flyby retain the pre-existing safe arrival altitude.
+   *
+   * Atmospheric entry targets a shallow but unambiguous point inside the
+   * body's own modeled atmosphere. The density-aware term corresponds to
+   * approximately 10^-5 of the atmosphere's modeled surface density. The
+   * 80% atmosphere-height cap prevents unusual scale-height definitions from
+   * leaving the nominal entry periapsis too close to the model boundary.
+   *
+   * The trajectory worker remains ballistic. During actual flight, the
+   * existing live atmosphere, drag, heating, parachute, and contact models
+   * take over as soon as the vehicle enters the atmosphere.
+   *
+   * Airless bodies receive a terrain-clearing low surface approach.
+   */
+  function transferArrivalAltitudeForModeV20(
+    vessel,
+    target,
+    mode,
+    defaults
+  ) {
+    const existingSafeAltitude = Math.max(
+      0,
+      finiteV9(
+        defaults?.safeAltitude
+      )
+    );
+
+    if (mode !== "entry") {
+      return existingSafeAltitude;
+    }
+
+    const terrainClearance =
+      transferTerrainClearanceV20(
+        vessel,
+        target
+      );
+
+    const atmosphere = target?.atmosphere;
+
+    const atmosphereHeight = Math.max(
+      0,
+      finiteV9(
+        atmosphere?.height
+      )
+    );
+
+    if (atmosphereHeight <= 0) {
+      return terrainClearance;
+    }
+
+    const scaleHeight = Math.max(
+      1,
+      finiteV9(
+        atmosphere.scaleHeight,
+        atmosphereHeight * 0.1
+      )
+    );
+
+    const densityAwareAltitude =
+      scaleHeight *
+      Math.log(100000);
+
+    const entryCandidate = Math.min(
+      atmosphereHeight * 0.8,
+      densityAwareAltitude
+    );
+
+    /*
+     * Keep the generated value strictly below the modeled atmosphere top.
+     * getAtmosphereState() treats altitude >= atmosphere.height as vacuum.
+     */
+    const belowTopMargin = Math.max(
+      1,
+      Math.min(
+        1000,
+        atmosphereHeight * 0.01
+      )
+    );
+
+    const maximumEntryAltitude = Math.max(
+      0,
+      atmosphereHeight -
+      belowTopMargin
+    );
+
+    return clamp(
+      Math.max(
+        terrainClearance,
+        entryCandidate
+      ),
+      0,
+      maximumEntryAltitude
+    );
+  }
+
+  runtime.entryModeDefaultFixV20 = true;
+  runtime.entryModeDefaultFixVersionV20 = "20.0";
+
+  /* SOLAR_ENTRY_MODE_DEFAULT_V20_END */
+
   function openTransferPlannerV9() {
     const vessel =
       activeVessel();
@@ -61724,14 +61391,6 @@ launchCurrentRocket = async function launchCurrentRocketSasOff() {
           >
           Create target-orbit capture node
         </label>
-
-        <label>
-          <input
-            id="transferAutoStageV20"
-            type="checkbox"
-          >
-          Auto-stage if propellant is depleted during transfer burns
-        </label>
       </div>
 
       <div
@@ -61778,7 +61437,11 @@ launchCurrentRocket = async function launchCurrentRocketSasOff() {
         "#createTransferPlanBtnV9"
       );
 
-    const arrivalModeSelectV20 =
+    let result = null;
+
+    /* SOLAR_ENTRY_MODE_PLANNER_WIRING_V20_BEGIN */
+
+    const arrivalModeInputV20 =
       node.querySelector(
         "#transferArrivalModeV9"
       );
@@ -61788,143 +61451,238 @@ launchCurrentRocket = async function launchCurrentRocketSasOff() {
         "#transferArrivalAltitudeV9"
       );
 
-    const captureInputV20 =
-      node.querySelector(
-        "#transferCaptureV9"
-      );
-
     let arrivalAltitudeAutoManagedV20 =
       true;
 
-    let capturePreferenceV20 =
-      Boolean(
-        captureInputV20?.checked
+    let generatedArrivalAltitudeV20 =
+      Math.max(
+        0,
+        finiteV9(
+          defaults.safeAltitude
+        )
       );
 
-    let result = null;
+    function formatArrivalAltitudeKmV20(
+      meters
+    ) {
+      const kilometers =
+        Math.max(
+          0,
+          finiteV9(meters)
+        ) / 1000;
 
-    function invalidatePlannerResultV20() {
-      result = null;
-      createButton.disabled = true;
+      const digits =
+        kilometers < 1
+          ? 3
+          : kilometers < 100
+            ? 2
+            : 1;
+
+      return String(
+        Number(
+          kilometers.toFixed(
+            digits
+          )
+        )
+      );
     }
 
-    arrivalAltitudeInputV20
-      ?.addEventListener(
-        "input",
-        () => {
-          arrivalAltitudeAutoManagedV20 =
-            false;
+    function setGeneratedArrivalAltitudeV20(
+      meters
+    ) {
+      generatedArrivalAltitudeV20 =
+        Math.max(
+          0,
+          finiteV9(meters)
+        );
 
-          invalidatePlannerResultV20();
-        }
-      );
+      arrivalAltitudeInputV20.value =
+        formatArrivalAltitudeKmV20(
+          generatedArrivalAltitudeV20
+        );
 
-    captureInputV20
-      ?.addEventListener(
-        "change",
-        () => {
-          capturePreferenceV20 =
-            Boolean(
-              captureInputV20.checked
-            );
+      arrivalAltitudeAutoManagedV20 =
+        true;
 
-          invalidatePlannerResultV20();
-        }
-      );
+      arrivalAltitudeInputV20
+        .removeAttribute(
+          "aria-invalid"
+        );
+    }
 
-    function applyArrivalModeV20() {
-      const mode =
-        arrivalModeSelectV20.value;
+    function markTransferParametersDirtyV20() {
+      result = null;
+
+      createButton.disabled =
+        true;
+
+      arrivalAltitudeInputV20
+        .removeAttribute(
+          "aria-invalid"
+        );
 
       if (
-        arrivalAltitudeAutoManagedV20
+        !MISSION_V9
+          .transferSolveInProgress
       ) {
-        const recommended =
-          mode === "entry"
-            ? defaults.entryAltitude
-            : defaults.safeAltitude;
+        status.className =
+          "transferPlannerStatusV9";
 
-        arrivalAltitudeInputV20.value =
-          (
-            recommended /
-            1000
-          ).toFixed(1);
-      }
-
-      if (mode === "orbit") {
-        captureInputV20.disabled =
-          !target.gravitySource;
-
-        captureInputV20.checked =
-          Boolean(
-            target.gravitySource &&
-            capturePreferenceV20
-          );
-      } else {
-        if (
-          !captureInputV20.disabled
-        ) {
-          capturePreferenceV20 =
-            Boolean(
-              captureInputV20.checked
-            );
-        }
-
-        captureInputV20.checked =
-          false;
-
-        captureInputV20.disabled =
-          true;
-      }
-
-      invalidatePlannerResultV20();
-
-      if (mode === "entry") {
-        const selectedAltitude =
-          Math.max(
-            0,
-            Number(
-              arrivalAltitudeInputV20.value
-            ) * 1000
-          );
-
-        if (
-          target.atmosphere?.height
-        ) {
-          const atmosphereHeight =
-            target.atmosphere.height;
-
-          status.textContent =
-            selectedAltitude <
-              atmosphereHeight
-              ? (
-                  `Entry mode will target ${formatAltitude(selectedAltitude)}, ` +
-                  `inside ${target.name}'s modeled ${formatAltitude(atmosphereHeight)} atmosphere. ` +
-                  "The transfer solve remains ballistic to the entry interface; live flight physics handles drag, heating, and parachutes."
-                )
-              : (
-                  `The custom ${formatAltitude(selectedAltitude)} arrival altitude is above ` +
-                  `${target.name}'s modeled ${formatAltitude(atmosphereHeight)} atmosphere and will not create atmospheric entry.`
-                );
-        } else {
-          status.textContent =
-            `Surface-approach mode will target ${formatAltitude(selectedAltitude)}, ` +
-            `including terrain and vehicle clearance for ${target.name}.`;
-        }
-      } else if (mode === "orbit") {
         status.textContent =
-          "Safe-orbit mode uses the existing atmosphere- and terrain-clearing arrival recommendation.";
-      } else {
-        status.textContent =
-          "Flyby mode keeps the current safe encounter altitude and does not create a capture node.";
+          "Parameters changed. Solve the transfer again.";
       }
     }
 
-    arrivalModeSelectV20
-      ?.addEventListener(
-        "change",
-        applyArrivalModeV20
+    function generatedAltitudeForCurrentModeV20() {
+      return transferArrivalAltitudeForModeV20(
+        vessel,
+        target,
+        arrivalModeInputV20.value,
+        defaults
       );
+    }
+
+    arrivalAltitudeInputV20.addEventListener(
+      "input",
+      () => {
+        arrivalAltitudeAutoManagedV20 =
+          false;
+
+        markTransferParametersDirtyV20();
+      }
+    );
+
+    arrivalModeInputV20.addEventListener(
+      "change",
+      () => {
+        markTransferParametersDirtyV20();
+
+        /*
+         * Preserve a valid user-entered custom altitude. If the altitude has
+         * not been edited, switch between the existing safe orbit/flyby
+         * altitude and the body-specific entry/surface-approach altitude.
+         */
+        if (
+          arrivalAltitudeAutoManagedV20
+        ) {
+          setGeneratedArrivalAltitudeV20(
+            generatedAltitudeForCurrentModeV20()
+          );
+        }
+      }
+    );
+
+    /*
+     * This target-capture listener runs before the planner's existing
+     * asynchronous solve listener. It makes the default deterministic and
+     * prevents a manually entered above-atmosphere value from masquerading
+     * as an entry plan.
+     */
+    solveButton.addEventListener(
+      "click",
+      event => {
+        const arrivalMode =
+          arrivalModeInputV20.value;
+
+        if (
+          arrivalAltitudeAutoManagedV20
+        ) {
+          setGeneratedArrivalAltitudeV20(
+            generatedAltitudeForCurrentModeV20()
+          );
+        }
+
+        const rawText =
+          String(
+            arrivalAltitudeInputV20.value
+          ).trim();
+
+        const altitudeKilometers =
+          Number(rawText);
+
+        function blockTransferSolveV20(
+          message
+        ) {
+          event.preventDefault();
+          event.stopPropagation();
+          event.stopImmediatePropagation();
+
+          result = null;
+
+          createButton.disabled =
+            true;
+
+          arrivalAltitudeInputV20
+            .setAttribute(
+              "aria-invalid",
+              "true"
+            );
+
+          status.className =
+            "transferPlannerStatusV9 badV9";
+
+          status.textContent =
+            message;
+
+          try {
+            arrivalAltitudeInputV20.focus({
+              preventScroll: true
+            });
+          } catch (_) {
+            arrivalAltitudeInputV20.focus();
+          }
+        }
+
+        if (
+          rawText === "" ||
+          !Number.isFinite(
+            altitudeKilometers
+          ) ||
+          altitudeKilometers < 0
+        ) {
+          blockTransferSolveV20(
+            "Enter a valid non-negative arrival periapsis altitude."
+          );
+
+          return;
+        }
+
+        const altitudeMeters =
+          altitudeKilometers *
+          1000;
+
+        const atmosphereHeight =
+          Math.max(
+            0,
+            finiteV9(
+              target.atmosphere?.height
+            )
+          );
+
+        if (
+          arrivalMode === "entry" &&
+          atmosphereHeight > 0 &&
+          altitudeMeters >=
+            atmosphereHeight
+        ) {
+          blockTransferSolveV20(
+            `Atmospheric entry at ${target.name} requires a periapsis below ` +
+            `the modeled atmosphere boundary (${formatDistance(atmosphereHeight)}). ` +
+            `Choose a lower altitude or select a different arrival mode.`
+          );
+
+          return;
+        }
+
+        arrivalAltitudeInputV20
+          .removeAttribute(
+            "aria-invalid"
+          );
+      },
+      true
+    );
+
+    /* SOLAR_ENTRY_MODE_PLANNER_WIRING_V20_END */
 
     solveButton.addEventListener(
       "click",
@@ -61980,7 +61738,7 @@ launchCurrentRocket = async function launchCurrentRocketSasOff() {
               ) * DAY
             );
 
-          let arrivalAltitude =
+          const arrivalAltitude =
             Math.max(
               0,
               Number(
@@ -61995,29 +61753,9 @@ launchCurrentRocket = async function launchCurrentRocketSasOff() {
               "#transferArrivalModeV9"
             ).value;
 
-          if (
-            arrivalAltitudeAutoManagedV20
-          ) {
-            arrivalAltitude =
-              arrivalMode === "entry"
-                ? defaults.entryAltitude
-                : defaults.safeAltitude;
-
-            arrivalAltitudeInputV20.value =
-              (
-                arrivalAltitude /
-                1000
-              ).toFixed(1);
-          }
-
           const autoCorrection =
             node.querySelector(
               "#transferCorrectionV9"
-            ).checked;
-
-          const autoStageOnFuelDepletionV19 =
-            node.querySelector(
-              "#transferAutoStageV20"
             ).checked;
 
           const createCapture =
@@ -62041,7 +61779,6 @@ launchCurrentRocket = async function launchCurrentRocketSasOff() {
                 arrivalMode,
                 autoCorrection,
                 createCapture,
-                autoStageOnFuelDepletionV19,
                 arrivalSide: 0
               }
             );
@@ -73123,7 +72860,7 @@ launchCurrentRocket = async function launchCurrentRocketSasOff() {
 
     if (dom.vabHint) {
       dom.vabHint.textContent =
-        "Copy detached - drag it to a highlighted node and release to attach.";
+        "Copy detached — drag it to a highlighted node and release to attach.";
     }
 
     const deferredCount =
@@ -85355,17 +85092,6 @@ launchCurrentRocket = async function launchCurrentRocketSasOff() {
 
 /* SOLAR_DOCKING_MANEUVER_V19_JS_END */
 
-
-/* SOLAR_ROUND_TRIP_FIX_V20_APPLIED
-   Applied by apply_round_trip_fixes.py.
-
-   Includes:
-   - batched stage parachutes
-   - universal entry / surface-approach defaults
-   - transfer-planner auto-stage
-   - conservative cross-stage fuel fallback
-   - camera-anchor Vehicle-panel suppression
- */
 
 initializeApplication();
 
