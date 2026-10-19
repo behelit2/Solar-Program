@@ -3445,6 +3445,320 @@ textarea {
 }
 
 /* SOLAR_UNDOCK_SECTION_DELETE_V15_CSS_END */
+
+/* SOLAR_ORBIT_LOCK_STAGE_SCROLL_V21_CSS_BEGIN */
+
+/*
+ * Only the in-flight stage-plan review modal receives this class.
+ *
+ * The modal body is the sole scrolling owner. The header and action footer
+ * stay fixed, while every staged part remains reachable with mouse, wheel,
+ * trackpad, keyboard, or touch scrolling.
+ */
+#modal.stageReviewScrollableV21 {
+  display: flex;
+  width: min(590px, 100%);
+  height: 82vh;
+  max-height: 760px;
+  min-height: 0;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+#modal.stageReviewScrollableV21 #modalHeader,
+#modal.stageReviewScrollableV21 #modalActions {
+  flex: 0 0 auto;
+}
+
+#modal.stageReviewScrollableV21 #modalBody {
+  max-height: none;
+  min-height: 0;
+  flex: 1 1 auto;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scroll-padding-top: 10px;
+  scroll-padding-bottom: 18px;
+  touch-action: pan-y;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-gutter: stable;
+}
+
+/*
+ * Avoid a nested-scroll region. The stage rows flow through the modal body's
+ * single, explicit scroll owner.
+ */
+#modal.stageReviewScrollableV21 .stagePlanListV9 {
+  min-height: min-content;
+  overflow: visible;
+}
+
+@supports (height: 100dvh) {
+  #modal.stageReviewScrollableV21 {
+    height: 82dvh;
+  }
+}
+
+@media (max-width: 760px) {
+  #modal.stageReviewScrollableV21 {
+    width: 100%;
+    height: calc(
+      100vh - var(--safe-t) - var(--safe-b) - 28px
+    );
+    max-height: calc(
+      100vh - var(--safe-t) - var(--safe-b) - 28px
+    );
+  }
+
+  @supports (height: 100dvh) {
+    #modal.stageReviewScrollableV21 {
+      height: calc(
+        100dvh - var(--safe-t) - var(--safe-b) - 28px
+      );
+      max-height: calc(
+        100dvh - var(--safe-t) - var(--safe-b) - 28px
+      );
+    }
+  }
+
+  #modal.stageReviewScrollableV21 #modalBody {
+    padding-bottom: calc(18px + var(--safe-b));
+    scroll-padding-bottom: calc(24px + var(--safe-b));
+  }
+}
+
+/* SOLAR_ORBIT_LOCK_STAGE_SCROLL_V21_CSS_END */
+
+/* SOLAR_MISSION_ROSTER_WIDE_TANK_V22_CSS_BEGIN */
+
+/* -------------------------------------------------------------------------
+   Mission Control vessel rename
+   ------------------------------------------------------------------------- */
+
+.missionRenameV22 {
+  width: 40px;
+  min-width: 40px;
+  min-height: 40px;
+  padding: 0;
+  flex: 0 0 auto;
+  display: inline-grid;
+  place-items: center;
+  border-color: rgba(103, 240, 228, .40);
+  background: rgba(10, 30, 48, .72);
+  color: var(--cyan);
+  font-size: 17px;
+}
+
+.missionRenameV22:hover {
+  border-color: rgba(103, 240, 228, .72);
+  color: #efffff;
+}
+
+/* -------------------------------------------------------------------------
+   Astronaut Complex
+   ------------------------------------------------------------------------- */
+
+.astronautComplexIntroV22 {
+  margin-top: 0;
+  color: #dbeaf7;
+}
+
+.astronautComplexSummaryV22 {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 7px;
+  margin: 10px 0 13px;
+}
+
+.astronautComplexStatV22 {
+  min-width: 0;
+  padding: 9px 6px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: rgba(4, 11, 22, .50);
+  text-align: center;
+}
+
+.astronautComplexStatV22 strong {
+  display: block;
+  overflow: hidden;
+  color: var(--cyan);
+  font-family: ui-monospace, "SFMono-Regular", Consolas, monospace;
+  font-size: 17px;
+  font-variant-numeric: tabular-nums;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.astronautComplexStatV22 span {
+  display: block;
+  margin-top: 2px;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 8px;
+  font-weight: 850;
+  letter-spacing: .045em;
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.astronautComplexToolbarV22 {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 155px;
+  gap: 7px;
+  margin-bottom: 12px;
+}
+
+.astronautComplexToolbarV22 select {
+  width: 100%;
+}
+
+.astronautRosterGroupV22 {
+  margin: 13px 0 7px;
+  color: #dcecff;
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+
+.astronautRosterRowV22 {
+  min-height: 64px;
+  align-items: flex-start;
+  cursor: default;
+  flex-wrap: wrap;
+}
+
+.astronautAvatarV22 {
+  width: 34px;
+  height: 34px;
+  flex: 0 0 34px;
+  display: grid;
+  place-items: center;
+  border: 1px solid rgba(103, 240, 228, .34);
+  border-radius: 50%;
+  background:
+    radial-gradient(circle at 35% 28%, #f1fbff, #67a7c8 42%, #253f56 75%);
+  color: #06111e;
+  font-size: 13px;
+  font-weight: 950;
+  text-transform: uppercase;
+}
+
+.astronautRosterMetaV22 {
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 1.42;
+  white-space: normal;
+}
+
+.astronautRosterBadgesV22 {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 5px;
+}
+
+.astronautRosterActionsV22 {
+  display: flex;
+  flex: 0 0 auto;
+  flex-wrap: wrap;
+  gap: 5px;
+  justify-content: flex-end;
+}
+
+.astronautRosterActionsV22 button {
+  min-height: 36px;
+}
+
+.astronautComplexEmptyV22 {
+  padding: 13px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: rgba(4, 11, 22, .44);
+  color: var(--muted);
+  line-height: 1.55;
+}
+
+.astronautDossierHeroV22 {
+  margin-bottom: 12px;
+  padding: 11px;
+  border: 1px solid rgba(103, 240, 228, .24);
+  border-radius: 11px;
+  background:
+    linear-gradient(
+      135deg,
+      rgba(23, 67, 91, .48),
+      rgba(7, 18, 32, .64)
+    );
+}
+
+.astronautDossierHeroV22 h3 {
+  margin: 0;
+  font-size: 17px;
+}
+
+.astronautDossierHeroV22 p {
+  margin: 5px 0 0;
+  color: var(--muted);
+}
+
+.astronautMissionLogV22 {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 9px;
+}
+
+.astronautMissionEventV22 {
+  padding: 8px 9px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgba(4, 11, 22, .46);
+}
+
+.astronautMissionEventV22 time {
+  display: block;
+  margin-bottom: 3px;
+  color: var(--cyan);
+  font-family: ui-monospace, "SFMono-Regular", Consolas, monospace;
+  font-size: 9px;
+  font-variant-numeric: tabular-nums;
+}
+
+.astronautMissionEventV22 span {
+  display: block;
+  color: #d7e5f1;
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+@media (max-width: 760px) {
+  .missionRenameV22 {
+    width: 44px;
+    min-width: 44px;
+    min-height: 44px;
+  }
+
+  .astronautComplexSummaryV22 {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .astronautComplexToolbarV22 {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .astronautRosterActionsV22 {
+    width: 100%;
+    justify-content: flex-start;
+    padding-left: 44px;
+  }
+}
+
+/* SOLAR_MISSION_ROSTER_WIDE_TANK_V22_CSS_END */
+
 </style>
 </head>
 <body>
@@ -14081,6 +14395,31 @@ definePart({
   },
   description:
     "A triple-length wide-body propellant tank with exactly three times the height, dry mass, and capacity of the LFO-1200 Wide Tank."
+});
+
+
+definePart({
+  id: "tank-lfo-superwide-7200",
+  name: "LFO-7200 Super-Wide Tank",
+  category: "fuel",
+  kind: "tankWide",
+  manufacturer: "Horizon Propellant Works",
+  width: 5.0,
+  height: 9.6,
+  dryMass: 7_140,
+  dragCoefficient: 0.34,
+  maxTemperature: 1_075,
+  thermalMass: 2_340_000,
+  crashTolerance: 11,
+  color: "#d7dadb",
+  color2: "#49555d",
+  accent: "#ff985e",
+  resources: {
+    liquidFuel: 3_240,
+    oxidizer: 3_960
+  },
+  description:
+    "A double-span heavy propellant tank with exactly twice the width, dry mass, thermal mass, and capacity of the LFO-3600 Triple Wide Tank while retaining the same height."
 });
 
 /* SOLAR_LUNAR_TANKS_V18_END */
@@ -68211,6 +68550,11 @@ launchCurrentRocket = async function launchCurrentRocketSasOff() {
       best: "Very large first stages and transfer stages where minimizing tank part count is important.",
       tradeoff: "A single tank carries substantial wet mass and creates a long vehicle section that needs sufficient control authority."
     },
+        "tank-lfo-superwide-7200": {
+      purpose: "A double-span 5 m liquid-fuel and oxidizer tank holding exactly twice the propellant of the LFO-3600 without adding height.",
+      best: "Very heavy first stages, large transfer stages, and wide vehicles where reducing tank height and part count is important.",
+      tradeoff: "Its fully loaded mass and broad aerodynamic footprint demand powerful engines, adequate control authority, and careful structural planning."
+    },
     /* SOLAR_LUNAR_TANK_GUIDANCE_V18_END */
     "tank-lfo-lander": {
       purpose: "A squat liquid propellant tank designed for compact vehicles.",
@@ -85093,8 +85437,3987 @@ launchCurrentRocket = async function launchCurrentRocketSasOff() {
 /* SOLAR_DOCKING_MANEUVER_V19_JS_END */
 
 
+
+/* SOLAR_MISSION_ROSTER_WIDE_TANK_V22_JS_BEGIN */
+
+/* ==========================================================================
+   SOLAR PROGRAM MISSION ROSTER / VESSEL RENAME V22
+
+   Targeted additions:
+   - rename controls for persistent Mission Control vessels
+   - generated " - separated" suffix cleanup in the rename editor
+   - Mission Control Astronaut Complex using existing astronaut metadata
+   - callsign editing, mission dossiers, status filtering, and tracking
+
+   Protected behavior:
+   - vessel IDs, parts, resources, crew, orbit, camera, and control state
+     are not changed when a vessel is renamed
+   - astronaut seat assignment remains owned by the existing unload, EVA,
+     boarding, and docked-transfer systems
+   - the existing Flight Manual implementation and top-bar help button remain
+     available
+   - no save-schema change is required
+   ========================================================================== */
+
+(function installMissionRosterWideTankV22() {
+  "use strict";
+
+  if (runtime.missionRosterWideTankPatchV22) return;
+
+  const PATCH_VERSION_V22 = "22.0";
+  const GENERATED_SEPARATION_SUFFIX_V22 =
+    /(?:\s*-\s*separated)+\s*$/i;
+
+  function saveSoonV22(delay = 0) {
+    if (
+      typeof scheduleUnifiedSaveV6 === "function"
+    ) {
+      scheduleUnifiedSaveV6(delay);
+      return;
+    }
+
+    if (
+      sim.initialized &&
+      typeof saveSimulationNow === "function"
+    ) {
+      saveSimulationNow({
+        quiet: true
+      });
+    }
+  }
+
+  function makeBadgeV22(
+    text,
+    className = ""
+  ) {
+    const badge =
+      document.createElement("span");
+
+    badge.className =
+      `badge ${className}`.trim();
+
+    badge.textContent =
+      text;
+
+    return badge;
+  }
+
+  /* =======================================================================
+     Vessel rename
+     ======================================================================= */
+
+  function cleanGeneratedVesselNameV22(
+    value
+  ) {
+    const original =
+      String(value || "").trim();
+
+    const cleaned =
+      original
+        .replace(
+          GENERATED_SEPARATION_SUFFIX_V22,
+          ""
+        )
+        .trim();
+
+    return (
+      cleaned ||
+      (
+        original &&
+        !GENERATED_SEPARATION_SUFFIX_V22.test(
+          original
+        )
+          ? original
+          : "Untitled Vessel"
+      )
+    );
+  }
+
+  function refreshRenamedVesselUiV22() {
+    ui.lastVesselListSignature = "";
+
+    refreshVesselList(true);
+    refreshSelectionCard();
+    refreshTargetUi();
+    refreshNetworkSummary();
+    updateTopBarAndStatus();
+  }
+
+  function openVesselRenameV22(
+    vessel
+  ) {
+    if (
+      !vessel ||
+      !sim.vesselMap.has(vessel.id)
+    ) {
+      toast(
+        "That vessel is no longer available.",
+        "warn"
+      );
+
+      return;
+    }
+
+    const form =
+      document.createElement("div");
+
+    const label =
+      document.createElement("label");
+
+    label.className =
+      "small";
+
+    label.htmlFor =
+      "vesselRenameInputV22";
+
+    label.textContent =
+      "Vessel name";
+
+    const input =
+      document.createElement("input");
+
+    input.id =
+      "vesselRenameInputV22";
+
+    input.type =
+      "text";
+
+    input.maxLength =
+      48;
+
+    input.autocomplete =
+      "off";
+
+    input.value =
+      cleanGeneratedVesselNameV22(
+        vessel.name
+      );
+
+    input.setAttribute(
+      "aria-label",
+      "New vessel name"
+    );
+
+    const hint =
+      document.createElement("p");
+
+    hint.className =
+      "muted small";
+
+    hint.textContent =
+      "Generated trailing “- separated” suffixes are removed from the suggested name. Renaming does not change the vessel’s parts, resources, crew, orbit, or control state.";
+
+    form.append(
+      label,
+      input,
+      hint
+    );
+
+    openModal({
+      title:
+        `Rename Vessel · ${vessel.name}`,
+
+      node:
+        form,
+
+      buttons: [
+        {
+          label: "Cancel",
+          value: null
+        },
+        {
+          label: "Rename",
+          className: "primary",
+          value: "renamed",
+          action: () => {
+            const liveVessel =
+              sim.vesselMap.get(
+                vessel.id
+              );
+
+            if (!liveVessel) {
+              toast(
+                "That vessel is no longer available.",
+                "warn"
+              );
+
+              return false;
+            }
+
+            const nextName =
+              String(
+                input.value || ""
+              )
+                .trim()
+                .slice(0, 48);
+
+            if (!nextName) {
+              toast(
+                "Enter a nonempty vessel name.",
+                "warn"
+              );
+
+              input.focus();
+              return false;
+            }
+
+            const previousName =
+              liveVessel.name;
+
+            liveVessel.name =
+              nextName;
+
+            refreshRenamedVesselUiV22();
+            saveSoonV22(0);
+
+            toast(
+              previousName === nextName
+                ? `${nextName} kept its current name`
+                : `${previousName} renamed to ${nextName}`,
+              "good",
+              3200
+            );
+          }
+        }
+      ]
+    });
+
+    requestAnimationFrame(() => {
+      try {
+        input.focus({
+          preventScroll: true
+        });
+
+        input.select();
+      } catch (_) {
+        input.focus();
+        input.select();
+      }
+    });
+  }
+
+  function addVesselRenameButtonV22(
+    row,
+    vessel
+  ) {
+    if (!row || !vessel) return;
+
+    const existing =
+      row.querySelector(
+        ".missionRenameV22"
+      );
+
+    if (
+      existing &&
+      existing.dataset.vesselId ===
+        vessel.id
+    ) {
+      return;
+    }
+
+    existing?.remove();
+
+    const button =
+      document.createElement("button");
+
+    button.type =
+      "button";
+
+    button.className =
+      "missionRenameV22";
+
+    button.textContent =
+      "✎";
+
+    button.dataset.vesselId =
+      vessel.id;
+
+    button.title =
+      `Rename ${vessel.name}`;
+
+    button.setAttribute(
+      "aria-label",
+      `Rename ${vessel.name}`
+    );
+
+    button.addEventListener(
+      "pointerdown",
+      event => {
+        event.stopPropagation();
+      }
+    );
+
+    button.addEventListener(
+      "dblclick",
+      event => {
+        event.preventDefault();
+        event.stopPropagation();
+      }
+    );
+
+    button.addEventListener(
+      "click",
+      event => {
+        event.preventDefault();
+        event.stopPropagation();
+
+        openVesselRenameV22(
+          sim.vesselMap.get(
+            vessel.id
+          )
+        );
+      }
+    );
+
+    const deleteButton =
+      row.querySelector(
+        ".missionDeleteV6"
+      );
+
+    row.insertBefore(
+      button,
+      deleteButton || null
+    );
+  }
+
+  const refreshVesselListV22Base =
+    refreshVesselList;
+
+  refreshVesselList =
+  function refreshVesselListV22(
+    force = false
+  ) {
+    const result =
+      refreshVesselListV22Base(
+        force
+      );
+
+    const vessels =
+      [...sim.vessels].sort(
+        (a, b) => {
+          if (
+            a.id === sim.activeVesselId
+          ) {
+            return -1;
+          }
+
+          if (
+            b.id === sim.activeVesselId
+          ) {
+            return 1;
+          }
+
+          if (
+            a.destroyed !== b.destroyed
+          ) {
+            return a.destroyed
+              ? 1
+              : -1;
+          }
+
+          if (
+            a.isDebris !== b.isDebris
+          ) {
+            return a.isDebris
+              ? 1
+              : -1;
+          }
+
+          return a.name.localeCompare(
+            b.name
+          );
+        }
+      );
+
+    const directRows =
+      Array.from(
+        dom.vesselList.children
+      ).filter(element =>
+        element.classList.contains(
+          "listItem"
+        )
+      );
+
+    directRows.forEach(
+      (row, index) => {
+        const vessel =
+          vessels[index];
+
+        if (!vessel) return;
+
+        row.dataset.vesselId =
+          vessel.id;
+
+        addVesselRenameButtonV22(
+          row,
+          vessel
+        );
+      }
+    );
+
+    return result;
+  };
+
+  /* =======================================================================
+     Astronaut Complex metadata
+     ======================================================================= */
+
+  function astronautStatusV22(
+    astronaut
+  ) {
+    if (
+      !astronaut ||
+      astronaut.alive === false ||
+      astronaut.status === "deceased"
+    ) {
+      return "deceased";
+    }
+
+    return (
+      astronaut.status ||
+      "available"
+    );
+  }
+
+  function astronautCategoryV22(
+    astronaut
+  ) {
+    const status =
+      astronautStatusV22(
+        astronaut
+      );
+
+    if (status === "deceased") {
+      return "lost";
+    }
+
+    if (status === "recovered") {
+      return "recovered";
+    }
+
+    if (status === "available") {
+      return "available";
+    }
+
+    if (status === "aboard") {
+      return "assigned";
+    }
+
+    if (
+      status === "eva" ||
+      status === "stranded" ||
+      status === "aboardDebris"
+    ) {
+      return "surface";
+    }
+
+    return "other";
+  }
+
+  function astronautLocationV22(
+    astronaut
+  ) {
+    const status =
+      astronautStatusV22(
+        astronaut
+      );
+
+    if (status === "aboard") {
+      const vessel =
+        astronaut.hostVesselId
+          ? sim.vesselMap.get(
+              astronaut.hostVesselId
+            )
+          : null;
+
+      const part =
+        vessel &&
+        astronaut.hostPartId
+          ? findPart(
+              vessel,
+              astronaut.hostPartId
+            )
+          : null;
+
+      if (vessel && part) {
+        return (
+          `${vessel.name} · ` +
+          `${getPartDef(part.defId)?.name || "Crew cabin"}`
+        );
+      }
+
+      if (vessel) {
+        return vessel.name;
+      }
+
+      return "Assigned vessel unavailable";
+    }
+
+    if (status === "aboardDebris") {
+      const debris =
+        astronaut.hostDebrisId
+          ? (
+              LANDER_V5
+                .debrisMap
+                .get(
+                  astronaut.hostDebrisId
+                ) ||
+              sim.debris.find(
+                item =>
+                  item.id ===
+                  astronaut.hostDebrisId
+              )
+            )
+          : null;
+
+      return debris
+        ? `Crash survivor · ${debris.name}`
+        : "Crash-survivor record";
+    }
+
+    if (
+      status === "eva" ||
+      status === "stranded"
+    ) {
+      const body =
+        astronaut.bodyId
+          ? getBody(
+              astronaut.bodyId
+            )
+          : null;
+
+      return body
+        ? `${titleCase(status)} on ${body.name}`
+        : titleCase(status);
+    }
+
+    if (status === "recovered") {
+      return "Returned to the Astronaut Complex";
+    }
+
+    if (status === "available") {
+      return "Available roster";
+    }
+
+    if (status === "deceased") {
+      return "Memorial roster";
+    }
+
+    return titleCase(status);
+  }
+
+  function astronautFlagCountV22(
+    astronaut
+  ) {
+    return (sim.flags || [])
+      .filter(flag =>
+        flag.placedByAstronautId ===
+        astronaut.id
+      )
+      .length;
+  }
+
+  function astronautTrackTargetV22(
+    astronaut
+  ) {
+    const status =
+      astronautStatusV22(
+        astronaut
+      );
+
+    if (status === "aboard") {
+      const vessel =
+        astronaut.hostVesselId
+          ? sim.vesselMap.get(
+              astronaut.hostVesselId
+            )
+          : null;
+
+      return vessel
+        ? {
+            type: "vessel",
+            id: vessel.id,
+            name: vessel.name
+          }
+        : null;
+    }
+
+    if (
+      status === "eva" ||
+      status === "stranded"
+    ) {
+      return {
+        type: "astronaut",
+        id: astronaut.id,
+        name: astronaut.name
+      };
+    }
+
+    if (status === "aboardDebris") {
+      const debris =
+        astronaut.hostDebrisId
+          ? LANDER_V5
+              .debrisMap
+              .get(
+                astronaut.hostDebrisId
+              )
+          : null;
+
+      return debris
+        ? {
+            type: "debris",
+            id: debris.id,
+            name: debris.name
+          }
+        : null;
+    }
+
+    return null;
+  }
+
+  function astronautRibbonsV22(
+    astronaut
+  ) {
+    const status =
+      astronautStatusV22(
+        astronaut
+      );
+
+    const flags =
+      astronautFlagCountV22(
+        astronaut
+      );
+
+    const ribbons = [];
+
+    if (status === "deceased") {
+      return [
+        {
+          text: "Memorial",
+          className: "red"
+        }
+      ];
+    }
+
+    if (status === "aboard") {
+      ribbons.push({
+        text: "In Flight",
+        className: "green"
+      });
+    }
+
+    if (status === "eva") {
+      ribbons.push({
+        text: "EVA",
+        className: "amber"
+      });
+    }
+
+    if (status === "stranded") {
+      ribbons.push({
+        text: "Stranded",
+        className: "red"
+      });
+    }
+
+    if (status === "aboardDebris") {
+      ribbons.push({
+        text: "Crash Survivor",
+        className: "amber"
+      });
+    }
+
+    if (status === "recovered") {
+      ribbons.push({
+        text: "Recovered Veteran",
+        className: "green"
+      });
+    }
+
+    if (
+      flags > 0 ||
+      astronaut.flagAvailable === false
+    ) {
+      ribbons.push({
+        text: "Flag Bearer",
+        className: "amber"
+      });
+    }
+
+    if (
+      Array.isArray(
+        astronaut.missionLog
+      ) &&
+      astronaut.missionLog.length >= 5
+    ) {
+      ribbons.push({
+        text: "Veteran",
+        className: "green"
+      });
+    }
+
+    if (!ribbons.length) {
+      ribbons.push({
+        text: titleCase(status),
+        className:
+          status === "available"
+            ? ""
+            : "green"
+      });
+    }
+
+    return ribbons.slice(0, 4);
+  }
+
+  function astronautInitialsV22(
+    astronaut
+  ) {
+    const words =
+      String(
+        astronaut?.name || "A"
+      )
+        .trim()
+        .split(/\s+/)
+        .filter(Boolean);
+
+    if (!words.length) return "A";
+
+    if (words.length === 1) {
+      return words[0]
+        .slice(0, 1)
+        .toUpperCase();
+    }
+
+    return (
+      words[0].slice(0, 1) +
+      words[words.length - 1]
+        .slice(0, 1)
+    ).toUpperCase();
+  }
+
+  function trackAstronautV22(
+    astronaut
+  ) {
+    const target =
+      astronautTrackTargetV22(
+        astronaut
+      );
+
+    if (!target) {
+      toast(
+        "This astronaut has no trackable world location.",
+        "warn"
+      );
+
+      return;
+    }
+
+    closeModal(null);
+    closeDrawer();
+
+    focusCameraOn(
+      target.type,
+      target.id,
+      true
+    );
+
+    ui.selectionOpen = true;
+
+    refreshSelectionCard();
+    refreshFlightUiVisibility();
+  }
+
+  /* =======================================================================
+     Astronaut rename
+     ======================================================================= */
+
+  function openAstronautRenameV22(
+    astronaut
+  ) {
+    if (!astronaut) return;
+
+    const form =
+      document.createElement("div");
+
+    const label =
+      document.createElement("label");
+
+    label.className =
+      "small";
+
+    label.htmlFor =
+      "astronautRenameInputV22";
+
+    label.textContent =
+      "Astronaut name / callsign";
+
+    const input =
+      document.createElement("input");
+
+    input.id =
+      "astronautRenameInputV22";
+
+    input.type =
+      "text";
+
+    input.maxLength =
+      48;
+
+    input.autocomplete =
+      "off";
+
+    input.value =
+      astronaut.name || "";
+
+    const hint =
+      document.createElement("p");
+
+    hint.className =
+      "muted small";
+
+    hint.textContent =
+      "The astronaut’s identity, assignments, status, flags, and mission history remain unchanged.";
+
+    form.append(
+      label,
+      input,
+      hint
+    );
+
+    openModal({
+      title:
+        `Edit Astronaut · ${astronaut.name}`,
+
+      node:
+        form,
+
+      buttons: [
+        {
+          label: "Back",
+          value: "back"
+        },
+        {
+          label: "Save Name",
+          className: "primary",
+          value: "saved",
+          action: () => {
+            const liveAstronaut =
+              LANDER_V5
+                .astronautMap
+                .get(
+                  astronaut.id
+                ) ||
+              sim.astronauts.find(
+                candidate =>
+                  candidate.id ===
+                  astronaut.id
+              );
+
+            if (!liveAstronaut) {
+              toast(
+                "That astronaut is no longer available.",
+                "warn"
+              );
+
+              return false;
+            }
+
+            const nextName =
+              String(
+                input.value || ""
+              )
+                .trim()
+                .slice(0, 48);
+
+            if (!nextName) {
+              toast(
+                "Enter a nonempty astronaut name.",
+                "warn"
+              );
+
+              input.focus();
+              return false;
+            }
+
+            const previousName =
+              liveAstronaut.name;
+
+            liveAstronaut.name =
+              nextName;
+
+            for (const flag of
+                 sim.flags || []) {
+              if (
+                flag.placedByAstronautId ===
+                liveAstronaut.id
+              ) {
+                flag.placedByName =
+                  nextName;
+              }
+            }
+
+            refreshObjectList(true);
+            refreshVesselList(true);
+            refreshSelectionCard();
+            saveSoonV22(0);
+
+            toast(
+              `${previousName} is now listed as ${nextName}`,
+              "good",
+              3200
+            );
+          }
+        }
+      ],
+
+      onClose: () => {
+        setTimeout(
+          showAstronautComplexV22,
+          0
+        );
+      }
+    });
+
+    requestAnimationFrame(() => {
+      try {
+        input.focus({
+          preventScroll: true
+        });
+
+        input.select();
+      } catch (_) {
+        input.focus();
+        input.select();
+      }
+    });
+  }
+
+  /* =======================================================================
+     Astronaut dossier
+     ======================================================================= */
+
+  function showAstronautDossierV22(
+    astronaut
+  ) {
+    if (!astronaut) return;
+
+    const status =
+      astronautStatusV22(
+        astronaut
+      );
+
+    const location =
+      astronautLocationV22(
+        astronaut
+      );
+
+    const flags =
+      astronautFlagCountV22(
+        astronaut
+      );
+
+    const events =
+      Array.isArray(
+        astronaut.missionLog
+      )
+        ? [...astronaut.missionLog]
+            .reverse()
+        : [];
+
+    const node =
+      document.createElement("div");
+
+    const hero =
+      document.createElement("div");
+
+    hero.className =
+      "astronautDossierHeroV22";
+
+    hero.innerHTML = `
+      <h3>${escapeHtml(astronaut.name)}</h3>
+      <p>
+        ${escapeHtml(titleCase(status))}
+        · ${escapeHtml(location)}
+      </p>
+    `;
+
+    const stats =
+      document.createElement("div");
+
+    stats.className =
+      "partInfoTableV12";
+
+    stats.innerHTML = `
+      <span>Status</span>
+      <span>${escapeHtml(titleCase(status))}</span>
+
+      <span>Current assignment</span>
+      <span>${escapeHtml(location)}</span>
+
+      <span>Flag carried</span>
+      <span>${astronaut.flagAvailable === false ? "Used" : "Available"}</span>
+
+      <span>Flags planted</span>
+      <span>${flags}</span>
+
+      <span>Mission-log events</span>
+      <span>${events.length}</span>
+    `;
+
+    const heading =
+      document.createElement("h3");
+
+    heading.textContent =
+      "Mission Log";
+
+    heading.style.marginTop =
+      "15px";
+
+    const log =
+      document.createElement("div");
+
+    log.className =
+      "astronautMissionLogV22";
+
+    if (!events.length) {
+      const empty =
+        document.createElement("div");
+
+      empty.className =
+        "astronautComplexEmptyV22";
+
+      empty.textContent =
+        "No mission-log events have been recorded for this astronaut.";
+
+      log.appendChild(empty);
+    } else {
+      for (const entry of events) {
+        const eventRow =
+          document.createElement("div");
+
+        eventRow.className =
+          "astronautMissionEventV22";
+
+        const time =
+          document.createElement("time");
+
+        time.textContent =
+          Number.isFinite(
+            Number(entry.time)
+          )
+            ? `T+${formatDuration(
+                Math.max(
+                  0,
+                  Number(entry.time)
+                )
+              )}`
+            : "Mission record";
+
+        const message =
+          document.createElement("span");
+
+        message.textContent =
+          entry.message ||
+          "Mission event";
+
+        eventRow.append(
+          time,
+          message
+        );
+
+        log.appendChild(eventRow);
+      }
+    }
+
+    node.append(
+      hero,
+      stats,
+      heading,
+      log
+    );
+
+    openModal({
+      title:
+        `Astronaut Dossier · ${astronaut.name}`,
+
+      node,
+
+      buttons: [
+        {
+          label: "Back to Complex",
+          action: () => {
+            setTimeout(
+              showAstronautComplexV22,
+              0
+            );
+          }
+        },
+        {
+          label: "Close",
+          className: "primary"
+        }
+      ]
+    });
+  }
+
+  /* =======================================================================
+     Astronaut Complex
+     ======================================================================= */
+
+  function showAstronautComplexV22() {
+    try {
+      rebuildLanderMapsV5();
+      reconcileCrewHostsV5();
+      updateSurfaceEntitiesV5();
+    } catch (error) {
+      console.warn(
+        "Astronaut roster reconciliation encountered a recoverable issue:",
+        error
+      );
+    }
+
+    const node =
+      document.createElement("div");
+
+    const intro =
+      document.createElement("p");
+
+    intro.className =
+      "astronautComplexIntroV22";
+
+    intro.textContent =
+      "Mission Control roster, assignments, surface personnel, veterans, and memorial records. Seat changes remain under the existing launch-pad, EVA, boarding, and docked-transfer controls.";
+
+    const astronauts =
+      Array.isArray(
+        sim.astronauts
+      )
+        ? sim.astronauts
+        : [];
+
+    const total =
+      astronauts.length;
+
+    const inFlight =
+      astronauts.filter(astronaut =>
+        [
+          "aboard",
+          "aboardDebris"
+        ].includes(
+          astronautStatusV22(
+            astronaut
+          )
+        )
+      ).length;
+
+    const surface =
+      astronauts.filter(astronaut =>
+        [
+          "eva",
+          "stranded"
+        ].includes(
+          astronautStatusV22(
+            astronaut
+          )
+        )
+      ).length;
+
+    const recovered =
+      astronauts.filter(astronaut =>
+        astronautStatusV22(
+          astronaut
+        ) === "recovered"
+      ).length;
+
+    const lost =
+      astronauts.filter(astronaut =>
+        astronautStatusV22(
+          astronaut
+        ) === "deceased"
+      ).length;
+
+    const summary =
+      document.createElement("div");
+
+    summary.className =
+      "astronautComplexSummaryV22";
+
+    const summaryRecords = [
+      ["Total", total],
+      ["In Flight", inFlight],
+      ["Surface", surface],
+      ["Recovered", recovered],
+      ["Lost", lost]
+    ];
+
+    for (const [
+      label,
+      value
+    ] of summaryRecords) {
+      const card =
+        document.createElement("div");
+
+      card.className =
+        "astronautComplexStatV22";
+
+      const number =
+        document.createElement("strong");
+
+      number.textContent =
+        String(value);
+
+      const caption =
+        document.createElement("span");
+
+      caption.textContent =
+        label;
+
+      card.append(
+        number,
+        caption
+      );
+
+      summary.appendChild(card);
+    }
+
+    const toolbar =
+      document.createElement("div");
+
+    toolbar.className =
+      "astronautComplexToolbarV22";
+
+    const search =
+      document.createElement("input");
+
+    search.type =
+      "search";
+
+    search.placeholder =
+      "Search astronauts, assignments, or status…";
+
+    search.setAttribute(
+      "aria-label",
+      "Search astronaut roster"
+    );
+
+    const filter =
+      document.createElement("select");
+
+    filter.setAttribute(
+      "aria-label",
+      "Filter astronaut roster"
+    );
+
+    const filterOptions = [
+      ["all", "All personnel"],
+      ["active", "Active missions"],
+      ["assigned", "Assigned crew"],
+      ["surface", "Surface operations"],
+      ["available", "Available roster"],
+      ["recovered", "Recovered veterans"],
+      ["lost", "Memorial"]
+    ];
+
+    for (const [
+      value,
+      label
+    ] of filterOptions) {
+      const option =
+        document.createElement("option");
+
+      option.value =
+        value;
+
+      option.textContent =
+        label;
+
+      filter.appendChild(option);
+    }
+
+    toolbar.append(
+      search,
+      filter
+    );
+
+    const roster =
+      document.createElement("div");
+
+    const groups = [
+      {
+        id: "assigned",
+        title: "Assigned Crew"
+      },
+      {
+        id: "surface",
+        title: "Surface Operations and Survivors"
+      },
+      {
+        id: "available",
+        title: "Available Roster"
+      },
+      {
+        id: "recovered",
+        title: "Recovered Veterans"
+      },
+      {
+        id: "lost",
+        title: "Memorial"
+      },
+      {
+        id: "other",
+        title: "Other Personnel"
+      }
+    ];
+
+    function astronautMatchesFilter(
+      astronaut
+    ) {
+      const category =
+        astronautCategoryV22(
+          astronaut
+        );
+
+      const selectedFilter =
+        filter.value;
+
+      if (
+        selectedFilter !== "all" &&
+        !(
+          selectedFilter === "active" &&
+          (
+            category === "assigned" ||
+            category === "surface"
+          )
+        ) &&
+        selectedFilter !== category
+      ) {
+        return false;
+      }
+
+      const query =
+        search.value
+          .trim()
+          .toLowerCase();
+
+      if (!query) return true;
+
+      const logText =
+        Array.isArray(
+          astronaut.missionLog
+        )
+          ? astronaut.missionLog
+              .map(entry =>
+                entry.message || ""
+              )
+              .join(" ")
+          : "";
+
+      const haystack = [
+        astronaut.name,
+        astronautStatusV22(
+          astronaut
+        ),
+        astronautLocationV22(
+          astronaut
+        ),
+        logText
+      ]
+        .join(" ")
+        .toLowerCase();
+
+      return haystack.includes(
+        query
+      );
+    }
+
+    function renderRoster() {
+      roster.replaceChildren();
+
+      if (!astronauts.length) {
+        const empty =
+          document.createElement("div");
+
+        empty.className =
+          "astronautComplexEmptyV22";
+
+        empty.textContent =
+          "No astronaut records exist yet. The existing crewed-launch workflow will create crew records when a crew-capable vessel is launched.";
+
+        roster.appendChild(empty);
+        return;
+      }
+
+      let visibleCount = 0;
+
+      for (const group of groups) {
+        const members =
+          astronauts
+            .filter(astronaut => (
+              astronautCategoryV22(
+                astronaut
+              ) === group.id &&
+              astronautMatchesFilter(
+                astronaut
+              )
+            ))
+            .sort((a, b) =>
+              String(a.name)
+                .localeCompare(
+                  String(b.name)
+                )
+            );
+
+        if (!members.length) {
+          continue;
+        }
+
+        const heading =
+          document.createElement("div");
+
+        heading.className =
+          "astronautRosterGroupV22";
+
+        heading.textContent =
+          `${group.title} · ${members.length}`;
+
+        roster.appendChild(
+          heading
+        );
+
+        for (const astronaut of members) {
+          visibleCount += 1;
+
+          const row =
+            document.createElement("div");
+
+          row.className =
+            "listItem astronautRosterRowV22";
+
+          const avatar =
+            document.createElement("div");
+
+          avatar.className =
+            "astronautAvatarV22";
+
+          avatar.textContent =
+            astronautInitialsV22(
+              astronaut
+            );
+
+          const main =
+            document.createElement("div");
+
+          main.className =
+            "main";
+
+          const title =
+            document.createElement("div");
+
+          title.className =
+            "title";
+
+          title.textContent =
+            astronaut.name;
+
+          const metadata =
+            document.createElement("div");
+
+          metadata.className =
+            "astronautRosterMetaV22";
+
+          const missionCount =
+            Array.isArray(
+              astronaut.missionLog
+            )
+              ? astronaut.missionLog.length
+              : 0;
+
+          const flagCount =
+            astronautFlagCountV22(
+              astronaut
+            );
+
+          metadata.textContent =
+            `${astronautLocationV22(astronaut)} · ` +
+            `${missionCount} mission event${missionCount === 1 ? "" : "s"} · ` +
+            `${flagCount} flag${flagCount === 1 ? "" : "s"} planted`;
+
+          const badges =
+            document.createElement("div");
+
+          badges.className =
+            "astronautRosterBadgesV22";
+
+          for (const ribbon of
+               astronautRibbonsV22(
+                 astronaut
+               )) {
+            badges.appendChild(
+              makeBadgeV22(
+                ribbon.text,
+                ribbon.className
+              )
+            );
+          }
+
+          main.append(
+            title,
+            metadata,
+            badges
+          );
+
+          const actions =
+            document.createElement("div");
+
+          actions.className =
+            "astronautRosterActionsV22";
+
+          const dossier =
+            document.createElement("button");
+
+          dossier.type =
+            "button";
+
+          dossier.className =
+            "compact";
+
+          dossier.textContent =
+            "Dossier";
+
+          dossier.addEventListener(
+            "click",
+            () => {
+              showAstronautDossierV22(
+                astronaut
+              );
+            }
+          );
+
+          const rename =
+            document.createElement("button");
+
+          rename.type =
+            "button";
+
+          rename.className =
+            "compact";
+
+          rename.textContent =
+            "Rename";
+
+          rename.addEventListener(
+            "click",
+            () => {
+              openAstronautRenameV22(
+                astronaut
+              );
+            }
+          );
+
+          actions.append(
+            dossier,
+            rename
+          );
+
+          const target =
+            astronautTrackTargetV22(
+              astronaut
+            );
+
+          if (target) {
+            const track =
+              document.createElement("button");
+
+            track.type =
+              "button";
+
+            track.className =
+              "compact primary";
+
+            track.textContent =
+              "Track";
+
+            track.title =
+              `Track ${target.name}`;
+
+            track.addEventListener(
+              "click",
+              () => {
+                trackAstronautV22(
+                  astronaut
+                );
+              }
+            );
+
+            actions.appendChild(
+              track
+            );
+          }
+
+          row.append(
+            avatar,
+            main,
+            actions
+          );
+
+          roster.appendChild(row);
+        }
+      }
+
+      if (!visibleCount) {
+        const empty =
+          document.createElement("div");
+
+        empty.className =
+          "astronautComplexEmptyV22";
+
+        empty.textContent =
+          "No astronaut records match the current search and filter.";
+
+        roster.appendChild(empty);
+      }
+    }
+
+    search.addEventListener(
+      "input",
+      renderRoster
+    );
+
+    filter.addEventListener(
+      "change",
+      renderRoster
+    );
+
+    node.append(
+      intro,
+      summary,
+      toolbar,
+      roster
+    );
+
+    renderRoster();
+
+    openModal({
+      title:
+        "Astronaut Complex",
+
+      node,
+
+      buttons: [
+        {
+          label: "Flight Manual",
+          action: () => {
+            setTimeout(
+              showHelp,
+              0
+            );
+          }
+        },
+        {
+          label: "Close",
+          className: "primary"
+        }
+      ]
+    });
+  }
+
+  /* =======================================================================
+     Repurpose the existing Mission Control Manual button
+
+     cloneNode() preserves ID, classes, and layout but deliberately does not
+     copy the old showHelp() event listener.
+     ======================================================================= */
+
+  function installAstronautComplexButtonV22() {
+    const oldButton =
+      byId("manualBtnV7");
+
+    if (!oldButton) {
+      console.warn(
+        "V22 could not find the Mission Control Manual button."
+      );
+
+      return;
+    }
+
+    if (
+      oldButton.dataset
+        .astronautComplexBoundV22
+    ) {
+      return;
+    }
+
+    const button =
+      oldButton.cloneNode(true);
+
+    button.textContent =
+      "Astronauts";
+
+    button.title =
+      "Open the Astronaut Complex";
+
+    button.setAttribute(
+      "aria-label",
+      "Open the Astronaut Complex"
+    );
+
+    button.dataset
+      .astronautComplexBoundV22 =
+      "true";
+
+    oldButton.replaceWith(
+      button
+    );
+
+    button.addEventListener(
+      "click",
+      showAstronautComplexV22
+    );
+  }
+
+  installAstronautComplexButtonV22();
+
+  window.SolarProgram.missionRosterV22 = {
+    version:
+      PATCH_VERSION_V22,
+
+    showAstronautComplex:
+      showAstronautComplexV22,
+
+    renameVessel(
+      vesselId,
+      name
+    ) {
+      const vessel =
+        sim.vesselMap.get(
+          vesselId
+        );
+
+      if (!vessel) {
+        throw new Error(
+          "Unknown vessel."
+        );
+      }
+
+      const nextName =
+        String(name || "")
+          .trim()
+          .slice(0, 48);
+
+      if (!nextName) {
+        throw new Error(
+          "A vessel name cannot be empty."
+        );
+      }
+
+      vessel.name =
+        nextName;
+
+      refreshRenamedVesselUiV22();
+      saveSoonV22(0);
+
+      return nextName;
+    },
+
+    suggestedVesselName(
+      vesselId
+    ) {
+      const vessel =
+        sim.vesselMap.get(
+          vesselId
+        );
+
+      return vessel
+        ? cleanGeneratedVesselNameV22(
+            vessel.name
+          )
+        : null;
+    }
+  };
+
+  runtime.missionRosterWideTankPatchV22 =
+    true;
+
+  runtime.missionRosterWideTankVersionV22 =
+    PATCH_VERSION_V22;
+})();
+
+/* SOLAR_MISSION_ROSTER_WIDE_TANK_V22_JS_END */
+
 initializeApplication();
 
+
+/* SOLAR_ORBIT_LOCK_STAGE_SCROLL_V21_JS_BEGIN */
+
+/* ==========================================================================
+   SOLAR PROGRAM ORBIT LOCK / STAGE SCROLL V21
+
+   Targeted corrections:
+   - persistent, exact coast-orbit invariants for active and inactive vessels
+   - no per-substep re-derivation of an already contaminated osculating orbit
+   - exact periapsis and apoapsis readouts while an orbit lock is active
+   - safe invalidation on real orbit-changing events
+   - an explicitly scrollable docked-vessel stage-review modal
+
+   Protected behavior:
+   - powered flight remains dynamically integrated
+   - translational RCS remains dynamically integrated
+   - atmospheric drag, heating, parachutes, and surface contact are unchanged
+   - close body encounters and sphere-of-influence transitions leave rails
+   - docking, undocking, staging, separation, and breakup invalidate locks
+   - celestial bodies retain their existing n-body simulation
+   - save-schema compatibility is unchanged
+   ========================================================================== */
+
+(function installOrbitLockStageScrollV21() {
+  "use strict";
+
+  if (runtime.orbitLockStageScrollPatchV21) return;
+
+  const PATCH_VERSION_V21 = "21.0";
+  const STAGE_MODAL_CLASS_V21 = "stageReviewScrollableV21";
+
+  /*
+   * If a normal physics substep is smaller than this dynamically calculated
+   * limit, the existing subsystem simulation runs and the translational state
+   * is then projected back to the exact conic.
+   *
+   * Unsafe larger substeps bypass numerical vessel translation entirely.
+   */
+  const MINIMUM_SAFE_TRANSLATION_STEP_V21 = 0.05;
+  const MAXIMUM_SAFE_TRANSLATION_STEP_V21 = 5;
+  const ORBIT_SAMPLES_PER_SAFE_STEP_V21 = 4096;
+
+  const MINIMUM_ORBIT_CLEARANCE_V21 = 100;
+  const ORBIT_EXTENT_CLEARANCE_FACTOR_V21 = 4;
+  const MINIMUM_REFERENCE_INFLUENCE_FACTOR_V21 = 20;
+  const REFERENCE_INFLUENCE_SAFETY_FACTOR_V21 = 0.72;
+
+  const POSITION_MATCH_FLOOR_V21 = 0.5;
+  const POSITION_MATCH_RELATIVE_V21 = 1e-9;
+  const VELOCITY_MATCH_FLOOR_V21 = 1e-4;
+  const VELOCITY_MATCH_RELATIVE_V21 = 1e-8;
+
+  const orbitLocksV21 =
+    runtime.orbitLocksV21 instanceof Map
+      ? runtime.orbitLocksV21
+      : new Map();
+
+  runtime.orbitLocksV21 = orbitLocksV21;
+  runtime.orbitLockPreparedStepV21 = null;
+  runtime.lastOrbitLockEventV21 = null;
+
+  /* =======================================================================
+     Staging-review modal scrolling
+     ======================================================================= */
+
+  function isStageReviewModalV21(options) {
+    const title = String(options?.title || "");
+    const node = options?.node;
+
+    if (
+      title === "Review Merged Stage Plan" ||
+      title === "In-Flight Stage Plan"
+    ) {
+      return true;
+    }
+
+    return Boolean(
+      node &&
+      typeof node.querySelector === "function" &&
+      node.querySelector(".stagePlanListV9")
+    );
+  }
+
+  const openModalV21Base = openModal;
+
+  openModal = function openModalV21(options = {}) {
+    const stageReview = isStageReviewModalV21(options);
+    const result = openModalV21Base(options);
+
+    dom.modal.classList.toggle(
+      STAGE_MODAL_CLASS_V21,
+      stageReview
+    );
+
+    if (stageReview) {
+      requestAnimationFrame(() => {
+        /*
+         * Start at the beginning but leave the complete appended list
+         * reachable. No stage order or staging semantics are changed.
+         */
+        dom.modalBody.scrollTop = 0;
+      });
+    }
+
+    return result;
+  };
+
+  const closeModalV21Base = closeModal;
+
+  closeModal = function closeModalV21(result = null) {
+    dom.modal.classList.remove(
+      STAGE_MODAL_CLASS_V21
+    );
+
+    return closeModalV21Base(result);
+  };
+
+  /* =======================================================================
+     Orbit-lock utility functions
+     ======================================================================= */
+
+  function finiteV21(value, fallback = 0) {
+    const number = Number(value);
+
+    return Number.isFinite(number)
+      ? number
+      : fallback;
+  }
+
+  function invalidateOrbitLockV21(
+    vesselOrId,
+    reason = "invalidated"
+  ) {
+    const id =
+      typeof vesselOrId === "string"
+        ? vesselOrId
+        : vesselOrId?.id;
+
+    if (!id) return false;
+
+    const existed = orbitLocksV21.delete(id);
+
+    const vessel = sim.vesselMap.get(id);
+
+    if (vessel) {
+      vessel.orbitLockedV21 = false;
+      vessel.orbitLockReasonV21 = reason;
+    }
+
+    if (existed) {
+      runtime.lastOrbitLockEventV21 = {
+        type: "released",
+        vesselId: id,
+        reason,
+        time: sim.time
+      };
+    }
+
+    return existed;
+  }
+
+  function vesselAggregateV21(vessel) {
+    if (!vessel.aggregate) {
+      computeVesselAggregate(vessel, false);
+    }
+
+    return vessel.aggregate;
+  }
+
+  function engineActuallyProducingThrustV21(vessel) {
+    let thrustRequested = false;
+
+    for (const part of vessel.parts || []) {
+      if (
+        part.destroyed ||
+        part.enabled === false ||
+        !part.engineActive
+      ) {
+        continue;
+      }
+
+      const engine =
+        getPartDef(part.defId)?.engine;
+
+      if (!engine) continue;
+
+      const throttle =
+        engine.throttleable
+          ? saturate(vessel.throttle)
+          : 1;
+
+      if (
+        !engine.throttleable ||
+        throttle > 1e-8
+      ) {
+        thrustRequested = true;
+        break;
+      }
+    }
+
+    if (!thrustRequested) return false;
+
+    /*
+     * This evaluator is virtual and does not consume propellant. It prevents
+     * stale engine-active or flameout flags from incorrectly breaking a lock.
+     */
+    try {
+      const solution =
+        evaluateEngineSolutionV51(
+          vessel,
+          1 / 60,
+          0,
+          0
+        );
+
+      return Boolean(
+        finiteV21(solution?.totalThrust) > 1e-4 &&
+        finiteV21(solution?.fueledEngineCount) > 0
+      );
+    } catch (error) {
+      /*
+       * Unknown imported propulsion is treated conservatively.
+       */
+      console.warn(
+        "V21 virtual thrust evaluation failed; releasing orbit lock:",
+        error
+      );
+
+      return true;
+    }
+  }
+
+  function translationalRcsActiveV21(vessel) {
+    if (
+      !vessel.rcsEnabled ||
+      !vessel.rcsTranslationModeV9
+    ) {
+      return false;
+    }
+
+    const forward = Math.abs(
+      finiteV21(
+        vessel.control?.rcsTranslateForwardV9
+      )
+    );
+
+    const right = Math.abs(
+      finiteV21(
+        vessel.control?.rcsTranslateRightV9
+      )
+    );
+
+    return forward > 1e-8 || right > 1e-8;
+  }
+
+  function referenceAncestryIdsV21(reference) {
+    const ids = new Set();
+    let current = reference;
+
+    while (
+      current &&
+      !ids.has(current.id)
+    ) {
+      ids.add(current.id);
+
+      current =
+        current.parentId
+          ? getBody(current.parentId)
+          : null;
+    }
+
+    return ids;
+  }
+
+  function bodyInfluenceEnvelopeV21(body) {
+    const radius = Math.max(
+      1,
+      finiteV21(body?.radius, 1)
+    );
+
+    const candidates = [];
+
+    try {
+      const hill = hillRadius(body);
+
+      if (
+        Number.isFinite(hill) &&
+        hill > radius
+      ) {
+        candidates.push(hill);
+      }
+    } catch (_) {
+      // Fall through to the radius-based envelope.
+    }
+
+    try {
+      const soi =
+        sphereOfInfluenceApprox(body);
+
+      if (
+        Number.isFinite(soi) &&
+        soi > radius
+      ) {
+        candidates.push(soi);
+      }
+    } catch (_) {
+      // Fall through to the radius-based envelope.
+    }
+
+    const physicalMinimum =
+      radius * 8;
+
+    if (!candidates.length) {
+      return Math.max(
+        physicalMinimum,
+        radius * 40
+      );
+    }
+
+    return Math.max(
+      physicalMinimum,
+      Math.min(...candidates) * 1.15
+    );
+  }
+
+  function nearOtherBodyEncounterV21(
+    vessel,
+    reference,
+    lookAheadSeconds = 0
+  ) {
+    const ancestry =
+      referenceAncestryIdsV21(reference);
+
+    const candidates = new Map();
+
+    for (const body of sim.gravitySources) {
+      if (body?.id) {
+        candidates.set(body.id, body);
+      }
+    }
+
+    if (sim.target?.type === "body") {
+      const target = getBody(sim.target.id);
+
+      if (target) {
+        candidates.set(target.id, target);
+      }
+    }
+
+    for (const body of candidates.values()) {
+      if (
+        !body ||
+        body.destroyed ||
+        body.id === reference.id ||
+        ancestry.has(body.id) ||
+        finiteV21(body.mass) <= 0 ||
+        finiteV21(body.radius) <= 0
+      ) {
+        continue;
+      }
+
+      const separation = distance(
+        vessel.x,
+        vessel.y,
+        body.x,
+        body.y
+      );
+
+      const relativeSpeed = hypot2(
+        vessel.vx - body.vx,
+        vessel.vy - body.vy
+      );
+
+      const lookAheadReach =
+        relativeSpeed *
+        Math.max(
+          0,
+          Math.abs(
+            finiteV21(lookAheadSeconds)
+          )
+        ) *
+        1.20;
+
+      const envelope =
+        bodyInfluenceEnvelopeV21(body);
+
+      if (
+        separation <=
+        envelope +
+        lookAheadReach
+      ) {
+        return {
+          body,
+          separation,
+          envelope,
+          lookAheadReach
+        };
+      }
+    }
+
+    return null;
+  }
+
+  function referenceInfluenceLimitV21(body) {
+    if (
+      !body?.parentId ||
+      !body.orbit
+    ) {
+      return Infinity;
+    }
+
+    const radius = Math.max(
+      1,
+      finiteV21(body.radius, 1)
+    );
+
+    const candidates = [];
+
+    try {
+      const hill = hillRadius(body);
+
+      if (
+        Number.isFinite(hill) &&
+        hill > radius
+      ) {
+        candidates.push(hill);
+      }
+    } catch (_) {
+      // Ignore unavailable catalog estimate.
+    }
+
+    try {
+      const soi =
+        sphereOfInfluenceApprox(body);
+
+      if (
+        Number.isFinite(soi) &&
+        soi > radius
+      ) {
+        candidates.push(soi);
+      }
+    } catch (_) {
+      // Ignore unavailable catalog estimate.
+    }
+
+    if (!candidates.length) {
+      return radius *
+        MINIMUM_REFERENCE_INFLUENCE_FACTOR_V21;
+    }
+
+    return Math.max(
+      radius *
+        MINIMUM_REFERENCE_INFLUENCE_FACTOR_V21,
+      Math.min(...candidates)
+    );
+  }
+
+  function rawOrbitAroundReferenceV21(
+    vessel,
+    reference
+  ) {
+    if (
+      !vessel ||
+      !reference ||
+      finiteV21(reference.mass) <= 0
+    ) {
+      return null;
+    }
+
+    const aggregate =
+      vesselAggregateV21(vessel);
+
+    const state =
+      relativeState(
+        vessel,
+        reference
+      );
+
+    const mu =
+      gravitationalParameter(
+        reference,
+        finiteV21(aggregate?.mass)
+      );
+
+    const elements =
+      orbitalElementsFromRelativeState(
+        state.x,
+        state.y,
+        state.vx,
+        state.vy,
+        mu
+      );
+
+    return {
+      state,
+      mu,
+      elements
+    };
+  }
+
+  function orbitCandidateIsSafeV21(
+    vessel,
+    reference,
+    raw,
+    lookAheadSeconds
+  ) {
+    if (
+      !raw ||
+      !raw.elements ||
+      !raw.elements.bound ||
+      !Number.isFinite(
+        raw.elements.semiMajorAxis
+      ) ||
+      !Number.isFinite(
+        raw.elements.period
+      ) ||
+      raw.elements.semiMajorAxis <= 0 ||
+      raw.elements.eccentricity >= 0.995
+    ) {
+      return false;
+    }
+
+    const atmosphereHeight =
+      finiteV21(
+        reference.atmosphere?.height
+      );
+
+    const terrainHeight =
+      bodyIsLandableV5(reference)
+        ? Math.max(
+            0,
+            finiteV21(
+              reference.terrainAmplitude
+            )
+          )
+        : 0;
+
+    const extent = Math.max(
+      1,
+      finiteV21(
+        vessel.aggregate?.extent,
+        1
+      )
+    );
+
+    const minimumPeriapsis =
+      reference.radius +
+      atmosphereHeight +
+      terrainHeight +
+      Math.max(
+        MINIMUM_ORBIT_CLEARANCE_V21,
+        extent *
+          ORBIT_EXTENT_CLEARANCE_FACTOR_V21
+      );
+
+    if (
+      raw.elements.periapsis <=
+      minimumPeriapsis
+    ) {
+      return false;
+    }
+
+    const influenceLimit =
+      referenceInfluenceLimitV21(
+        reference
+      );
+
+    if (
+      Number.isFinite(influenceLimit) &&
+      Number.isFinite(
+        raw.elements.apoapsis
+      ) &&
+      raw.elements.apoapsis >=
+        influenceLimit *
+        REFERENCE_INFLUENCE_SAFETY_FACTOR_V21
+    ) {
+      return false;
+    }
+
+    if (
+      nearOtherBodyEncounterV21(
+        vessel,
+        reference,
+        lookAheadSeconds
+      )
+    ) {
+      return false;
+    }
+
+    return true;
+  }
+
+  function referenceCandidatesV21(
+    vessel,
+    preferredReferenceId = null
+  ) {
+    const candidates = [];
+    const seen = new Set();
+
+    function add(body) {
+      if (
+        !body ||
+        seen.has(body.id) ||
+        body.destroyed ||
+        finiteV21(body.mass) <= 0
+      ) {
+        return;
+      }
+
+      seen.add(body.id);
+      candidates.push(body);
+    }
+
+    if (preferredReferenceId) {
+      add(
+        getBody(
+          preferredReferenceId
+        )
+      );
+    }
+
+    if (vessel.referenceBodyId) {
+      add(
+        getBody(
+          vessel.referenceBodyId
+        )
+      );
+    }
+
+    try {
+      add(
+        findReferenceBody(vessel)
+      );
+    } catch (_) {
+      // Stored candidates may still be valid.
+    }
+
+    add(getBody("sun"));
+
+    return candidates;
+  }
+
+  function coastEligibilityV21(
+    vessel,
+    preferredReferenceId,
+    lookAheadSeconds
+  ) {
+    if (
+      !vessel ||
+      vessel.destroyed ||
+      !sim.vesselMap.has(vessel.id) ||
+      !hasFiniteKinematics(vessel) ||
+      vessel.surfaceLinkV5 ||
+      vessel.landed ||
+      engineActuallyProducingThrustV21(vessel) ||
+      translationalRcsActiveV21(vessel)
+    ) {
+      return null;
+    }
+
+    vesselAggregateV21(vessel);
+
+    for (const reference of
+         referenceCandidatesV21(
+           vessel,
+           preferredReferenceId
+         )) {
+      const altitude =
+        bodyAltitudeAtPoint(
+          reference,
+          vessel.x,
+          vessel.y
+        );
+
+      const atmosphere =
+        getAtmosphereState(
+          reference,
+          altitude
+        );
+
+      if (atmosphere.inside) {
+        continue;
+      }
+
+      const raw =
+        rawOrbitAroundReferenceV21(
+          vessel,
+          reference
+        );
+
+      if (
+        orbitCandidateIsSafeV21(
+          vessel,
+          reference,
+          raw,
+          lookAheadSeconds
+        )
+      ) {
+        return {
+          reference,
+          raw
+        };
+      }
+    }
+
+    return null;
+  }
+
+  function captureOrbitLockV21(
+    vessel,
+    reference,
+    raw
+  ) {
+    const {
+      state,
+      mu,
+      elements
+    } = raw;
+
+    const a =
+      elements.semiMajorAxis;
+
+    const e =
+      elements.eccentricity;
+
+    const radius =
+      Math.max(
+        1,
+        hypot2(
+          state.x,
+          state.y
+        )
+      );
+
+    const direction =
+      elements.angularMomentum >= 0
+        ? 1
+        : -1;
+
+    let p;
+
+    if (e > 1e-12) {
+      p = normalized(
+        elements.eccentricityX,
+        elements.eccentricityY,
+        state.x / radius,
+        state.y / radius
+      );
+    } else {
+      p = normalized(
+        state.x,
+        state.y
+      );
+    }
+
+    const q =
+      direction > 0
+        ? {
+            x: -p.y,
+            y: p.x
+          }
+        : {
+            x: p.y,
+            y: -p.x
+          };
+
+    const root =
+      Math.sqrt(
+        Math.max(
+          1e-15,
+          1 - e * e
+        )
+      );
+
+    const cosineE =
+      clamp(
+        dot(
+          state.x,
+          state.y,
+          p.x,
+          p.y
+        ) /
+        Math.max(1e-15, a) +
+        e,
+        -1,
+        1
+      );
+
+    const sineE =
+      clamp(
+        dot(
+          state.x,
+          state.y,
+          q.x,
+          q.y
+        ) /
+        Math.max(
+          1e-15,
+          a * root
+        ),
+        -1,
+        1
+      );
+
+    const eccentricAnomaly =
+      Math.atan2(
+        sineE,
+        cosineE
+      );
+
+    const meanAnomaly =
+      eccentricAnomaly -
+      e *
+      Math.sin(
+        eccentricAnomaly
+      );
+
+    const meanMotion =
+      Math.sqrt(
+        mu /
+        (a * a * a)
+      );
+
+    const lock = {
+      version:
+        PATCH_VERSION_V21,
+
+      vesselId:
+        vessel.id,
+
+      referenceBodyId:
+        reference.id,
+
+      epochTime:
+        sim.time,
+
+      a,
+      e,
+
+      pX:
+        p.x,
+
+      pY:
+        p.y,
+
+      qX:
+        q.x,
+
+      qY:
+        q.y,
+
+      root,
+
+      direction,
+
+      mu,
+
+      meanAnomaly,
+
+      meanMotion,
+
+      periapsis:
+        a * (1 - e),
+
+      apoapsis:
+        a * (1 + e),
+
+      period:
+        TWO_PI /
+        meanMotion,
+
+      longitudeOfPeriapsis:
+        Math.atan2(
+          p.y,
+          p.x
+        ),
+
+      capturedAt:
+        sim.time
+    };
+
+    orbitLocksV21.set(
+      vessel.id,
+      lock
+    );
+
+    vessel.orbitLockedV21 = true;
+    vessel.orbitLockReasonV21 =
+      "stable unpowered coast";
+
+    runtime.lastOrbitLockEventV21 = {
+      type: "captured",
+      vesselId:
+        vessel.id,
+      referenceBodyId:
+        reference.id,
+      periapsis:
+        lock.periapsis,
+      apoapsis:
+        lock.apoapsis,
+      time:
+        sim.time
+    };
+
+    return lock;
+  }
+
+  function lockedRelativeStateV21(
+    lock,
+    time
+  ) {
+    const meanAnomaly =
+      lock.meanAnomaly +
+      lock.meanMotion *
+      (
+        time -
+        lock.epochTime
+      );
+
+    const eccentricAnomaly =
+      solveKepler(
+        meanAnomaly,
+        lock.e
+      );
+
+    const cosineE =
+      Math.cos(
+        eccentricAnomaly
+      );
+
+    const sineE =
+      Math.sin(
+        eccentricAnomaly
+      );
+
+    const denominator =
+      Math.max(
+        1e-12,
+        1 -
+        lock.e *
+        cosineE
+      );
+
+    const eccentricRate =
+      lock.meanMotion /
+      denominator;
+
+    const x =
+      lock.a *
+      (
+        cosineE -
+        lock.e
+      ) *
+      lock.pX +
+      lock.a *
+      lock.root *
+      sineE *
+      lock.qX;
+
+    const y =
+      lock.a *
+      (
+        cosineE -
+        lock.e
+      ) *
+      lock.pY +
+      lock.a *
+      lock.root *
+      sineE *
+      lock.qY;
+
+    const vx =
+      -lock.a *
+      sineE *
+      eccentricRate *
+      lock.pX +
+      lock.a *
+      lock.root *
+      cosineE *
+      eccentricRate *
+      lock.qX;
+
+    const vy =
+      -lock.a *
+      sineE *
+      eccentricRate *
+      lock.pY +
+      lock.a *
+      lock.root *
+      cosineE *
+      eccentricRate *
+      lock.qY;
+
+    return {
+      x,
+      y,
+      vx,
+      vy,
+      eccentricAnomaly,
+      meanAnomaly
+    };
+  }
+
+  function orbitStateMatchesLockV21(
+    vessel,
+    reference,
+    lock
+  ) {
+    const expected =
+      lockedRelativeStateV21(
+        lock,
+        sim.time
+      );
+
+    const actual =
+      relativeState(
+        vessel,
+        reference
+      );
+
+    const positionError =
+      hypot2(
+        actual.x -
+        expected.x,
+        actual.y -
+        expected.y
+      );
+
+    const velocityError =
+      hypot2(
+        actual.vx -
+        expected.vx,
+        actual.vy -
+        expected.vy
+      );
+
+    const positionTolerance =
+      Math.max(
+        POSITION_MATCH_FLOOR_V21,
+        lock.a *
+        POSITION_MATCH_RELATIVE_V21
+      );
+
+    const characteristicSpeed =
+      Math.sqrt(
+        lock.mu /
+        Math.max(1, lock.a)
+      );
+
+    const velocityTolerance =
+      Math.max(
+        VELOCITY_MATCH_FLOOR_V21,
+        characteristicSpeed *
+        VELOCITY_MATCH_RELATIVE_V21
+      );
+
+    return {
+      matches:
+        positionError <=
+          positionTolerance &&
+        velocityError <=
+          velocityTolerance,
+
+      positionError,
+      velocityError,
+      positionTolerance,
+      velocityTolerance
+    };
+  }
+
+  function applyLockedInvariantsV21(
+    elements,
+    lock
+  ) {
+    if (!elements || !lock) {
+      return elements;
+    }
+
+    const angularMomentum =
+      lock.direction *
+      Math.sqrt(
+        Math.max(
+          0,
+          lock.mu *
+          lock.a *
+          (
+            1 -
+            lock.e *
+            lock.e
+          )
+        )
+      );
+
+    elements.semiMajorAxis =
+      lock.a;
+
+    elements.eccentricity =
+      lock.e;
+
+    elements.eccentricityX =
+      lock.e *
+      lock.pX;
+
+    elements.eccentricityY =
+      lock.e *
+      lock.pY;
+
+    elements.longitudeOfPeriapsis =
+      lock.longitudeOfPeriapsis;
+
+    elements.periapsis =
+      lock.periapsis;
+
+    elements.apoapsis =
+      lock.apoapsis;
+
+    elements.period =
+      lock.period;
+
+    elements.angularMomentum =
+      angularMomentum;
+
+    elements.specificEnergy =
+      -lock.mu /
+      (
+        2 *
+        lock.a
+      );
+
+    elements.bound = true;
+    elements.retrograde =
+      lock.direction < 0;
+
+    return elements;
+  }
+
+  function lockedOrbitElementsV21(
+    vessel,
+    reference,
+    lock
+  ) {
+    const state =
+      relativeState(
+        vessel,
+        reference
+      );
+
+    const raw =
+      orbitalElementsFromRelativeState(
+        state.x,
+        state.y,
+        state.vx,
+        state.vy,
+        lock.mu
+      );
+
+    return applyLockedInvariantsV21(
+      raw,
+      lock
+    );
+  }
+
+  function postStepLockStillValidV21(
+    vessel,
+    lock
+  ) {
+    if (
+      !vessel ||
+      vessel.destroyed ||
+      !sim.vesselMap.has(vessel.id) ||
+      vessel.surfaceLinkV5 ||
+      vessel.landed ||
+      engineActuallyProducingThrustV21(vessel) ||
+      translationalRcsActiveV21(vessel)
+    ) {
+      return false;
+    }
+
+    const reference =
+      getBody(
+        lock.referenceBodyId
+      );
+
+    if (!reference) return false;
+
+    const currentReference =
+      getBody(
+        vessel.referenceBodyId
+      ) ||
+      findReferenceBody(vessel);
+
+    if (
+      currentReference?.id !==
+      reference.id
+    ) {
+      return false;
+    }
+
+    const altitude =
+      bodyAltitudeAtPoint(
+        reference,
+        vessel.x,
+        vessel.y
+      );
+
+    if (
+      getAtmosphereState(
+        reference,
+        altitude
+      ).inside
+    ) {
+      return false;
+    }
+
+    if (
+      nearOtherBodyEncounterV21(
+        vessel,
+        reference,
+        0
+      )
+    ) {
+      return false;
+    }
+
+    return true;
+  }
+
+  /* =======================================================================
+     Lock preparation before celestial-body advancement
+     ======================================================================= */
+
+  function prepareOrbitLocksV21(dt) {
+    const prepared = {
+      startTime:
+        sim.time,
+
+      endTime:
+        sim.time +
+        dt,
+
+      dt,
+
+      entries:
+        new Map()
+    };
+
+    for (const id of [...orbitLocksV21.keys()]) {
+      if (!sim.vesselMap.has(id)) {
+        orbitLocksV21.delete(id);
+      }
+    }
+
+    for (const vessel of sim.vessels) {
+      if (
+        !vessel ||
+        vessel.destroyed ||
+        !sim.vesselMap.has(vessel.id)
+      ) {
+        invalidateOrbitLockV21(
+          vessel,
+          "vessel unavailable"
+        );
+
+        continue;
+      }
+
+      let lock =
+        orbitLocksV21.get(
+          vessel.id
+        ) || null;
+
+      const eligibility =
+        coastEligibilityV21(
+          vessel,
+          lock?.referenceBodyId ||
+          null,
+          dt
+        );
+
+      if (!eligibility) {
+        invalidateOrbitLockV21(
+          vessel,
+          "coast eligibility ended"
+        );
+
+        continue;
+      }
+
+      if (
+        lock &&
+        lock.referenceBodyId ===
+          eligibility.reference.id
+      ) {
+        const match =
+          orbitStateMatchesLockV21(
+            vessel,
+            eligibility.reference,
+            lock
+          );
+
+        if (!match.matches) {
+          invalidateOrbitLockV21(
+            vessel,
+            "physical state changed"
+          );
+
+          lock = null;
+
+          runtime.lastOrbitLockMismatchV21 = {
+            vesselId:
+              vessel.id,
+            referenceBodyId:
+              eligibility.reference.id,
+            time:
+              sim.time,
+            ...match
+          };
+        }
+      } else if (lock) {
+        invalidateOrbitLockV21(
+          vessel,
+          "reference body changed"
+        );
+
+        lock = null;
+      }
+
+      if (!lock) {
+        lock =
+          captureOrbitLockV21(
+            vessel,
+            eligibility.reference,
+            eligibility.raw
+          );
+      }
+
+      prepared.entries.set(
+        vessel.id,
+        {
+          lock,
+          referenceBodyId:
+            eligibility.reference.id
+        }
+      );
+    }
+
+    runtime.orbitLockPreparedStepV21 =
+      prepared;
+
+    return prepared;
+  }
+
+  const stepCelestialBodiesV21Base =
+    stepCelestialBodies;
+
+  stepCelestialBodies =
+  function stepCelestialBodiesV21(dt) {
+    if (
+      Number.isFinite(dt) &&
+      dt !== 0
+    ) {
+      prepareOrbitLocksV21(dt);
+    } else {
+      runtime.orbitLockPreparedStepV21 =
+        null;
+    }
+
+    return stepCelestialBodiesV21Base(
+      dt
+    );
+  };
+
+  /* =======================================================================
+     Exact propagation
+     ======================================================================= */
+
+  function updateLockedTelemetryV21(
+    vessel,
+    reference,
+    lock
+  ) {
+    const relative =
+      relativeState(
+        vessel,
+        reference
+      );
+
+    const radius =
+      Math.max(
+        1,
+        hypot2(
+          relative.x,
+          relative.y
+        )
+      );
+
+    const radial = {
+      x:
+        relative.x /
+        radius,
+      y:
+        relative.y /
+        radius
+    };
+
+    const tangent = {
+      x:
+        -radial.y,
+      y:
+        radial.x
+    };
+
+    const surfaceVelocity =
+      bodySurfaceVelocityAtPoint(
+        reference,
+        vessel.x,
+        vessel.y
+      );
+
+    const surfaceVx =
+      vessel.vx -
+      surfaceVelocity.x;
+
+    const surfaceVy =
+      vessel.vy -
+      surfaceVelocity.y;
+
+    const altitude =
+      radius -
+      reference.radius;
+
+    const atmosphere =
+      getAtmosphereState(
+        reference,
+        altitude
+      );
+
+    vessel.referenceBodyId =
+      reference.id;
+
+    vessel.environment.bodyId =
+      reference.id;
+
+    vessel.environment.altitude =
+      altitude;
+
+    vessel.environment.radarAltitude =
+      altitude;
+
+    vessel.environment.density =
+      atmosphere.density;
+
+    vessel.environment.pressure =
+      atmosphere.pressure;
+
+    vessel.environment.temperature =
+      atmosphere.temperature;
+
+    vessel.environment.speedOfSound =
+      atmosphere.speedOfSound;
+
+    vessel.environment.relativeSpeed =
+      hypot2(
+        relative.vx,
+        relative.vy
+      );
+
+    vessel.environment.mach = 0;
+    vessel.environment.dynamicPressure = 0;
+    vessel.environment.heatFlux = 0;
+
+    vessel.telemetry.verticalSpeed =
+      dot(
+        surfaceVx,
+        surfaceVy,
+        radial.x,
+        radial.y
+      );
+
+    vessel.telemetry.horizontalSpeed =
+      dot(
+        surfaceVx,
+        surfaceVy,
+        tangent.x,
+        tangent.y
+      );
+
+    vessel.telemetry.surfaceSpeed =
+      hypot2(
+        surfaceVx,
+        surfaceVy
+      );
+
+    vessel.telemetry.thrust = 0;
+    vessel.telemetry.massFlow = 0;
+    vessel.telemetry.drag = 0;
+    vessel.telemetry.lift = 0;
+    vessel.telemetry.gForce = 0;
+
+    vessel.telemetry.acceleration =
+      lock.mu /
+      (
+        radius *
+        radius
+      );
+
+    vessel.orbit =
+      lockedOrbitElementsV21(
+        vessel,
+        reference,
+        lock
+      );
+  }
+
+  function applyOrbitLockStateV21(
+    vessel,
+    lock,
+    endTime,
+    dt,
+    {
+      direct = false
+    } = {}
+  ) {
+    const reference =
+      getBody(
+        lock.referenceBodyId
+      );
+
+    if (
+      !reference ||
+      !hasFiniteKinematics(reference)
+    ) {
+      invalidateOrbitLockV21(
+        vessel,
+        "reference body unavailable"
+      );
+
+      return false;
+    }
+
+    if (
+      !vessel.aggregate ||
+      vessel.dirty
+    ) {
+      computeVesselAggregate(
+        vessel,
+        false
+      );
+
+      vessel.dirty = false;
+    }
+
+    const previousX =
+      vessel.x;
+
+    const previousY =
+      vessel.y;
+
+    const relative =
+      lockedRelativeStateV21(
+        lock,
+        endTime
+      );
+
+    if (direct) {
+      vessel.previousX =
+        previousX;
+
+      vessel.previousY =
+        previousY;
+
+      vessel.angle =
+        wrapAngle(
+          vessel.angle +
+          vessel.angularVelocity *
+          dt
+        );
+    }
+
+    vessel.x =
+      reference.x +
+      relative.x;
+
+    vessel.y =
+      reference.y +
+      relative.y;
+
+    vessel.vx =
+      reference.vx +
+      relative.vx;
+
+    vessel.vy =
+      reference.vy +
+      relative.vy;
+
+    vessel.renderX =
+      vessel.x;
+
+    vessel.renderY =
+      vessel.y;
+
+    const radiusSquared =
+      Math.max(
+        1,
+        relative.x *
+        relative.x +
+        relative.y *
+        relative.y
+      );
+
+    const inverseRadius =
+      1 /
+      Math.sqrt(
+        radiusSquared
+      );
+
+    const centralFactor =
+      -lock.mu *
+      inverseRadius /
+      radiusSquared;
+
+    vessel.ax =
+      finiteV21(
+        reference.ax
+      ) +
+      relative.x *
+      centralFactor;
+
+    vessel.ay =
+      finiteV21(
+        reference.ay
+      ) +
+      relative.y *
+      centralFactor;
+
+    if (direct) {
+      /*
+       * This mirrors the existing high-warp rail behavior: resources and
+       * sunlight continue updating, while unsafe translational integration
+       * is never attempted.
+       */
+      updateVesselPower(
+        vessel,
+        dt
+      );
+
+      vessel.control.available =
+        vesselCanControl(vessel);
+
+      vessel.lastPhysicsTime =
+        endTime;
+
+      sim.vesselSteps += 1;
+    }
+
+    updateLockedTelemetryV21(
+      vessel,
+      reference,
+      lock
+    );
+
+    vessel.orbitLockedV21 = true;
+    vessel.orbitLockReasonV21 =
+      "stable unpowered coast";
+
+    return true;
+  }
+
+  const stepVesselV21Base =
+    stepVessel;
+
+  stepVessel =
+  function stepVesselV21(
+    vessel,
+    dt
+  ) {
+    const prepared =
+      runtime
+        .orbitLockPreparedStepV21;
+
+    const entry =
+      prepared
+        ?.entries
+        ?.get(vessel?.id);
+
+    const lock =
+      entry?.lock;
+
+    if (
+      !lock ||
+      !vessel ||
+      vessel.destroyed ||
+      lock !==
+        orbitLocksV21.get(
+          vessel.id
+        )
+    ) {
+      return stepVesselV21Base(
+        vessel,
+        dt
+      );
+    }
+
+    const safeStep =
+      clamp(
+        lock.period /
+        ORBIT_SAMPLES_PER_SAFE_STEP_V21,
+        MINIMUM_SAFE_TRANSLATION_STEP_V21,
+        MAXIMUM_SAFE_TRANSLATION_STEP_V21
+      );
+
+    const direct = Boolean(
+      Math.abs(dt) >
+        safeStep ||
+      runtime.highWarpRailsActiveV8 ||
+      runtime.ultraWarpActiveV53
+    );
+
+    if (direct) {
+      return applyOrbitLockStateV21(
+        vessel,
+        lock,
+        prepared.endTime,
+        dt,
+        {
+          direct: true
+        }
+      );
+    }
+
+    /*
+     * For safe small steps, retain the current attitude, electrical,
+     * communications, and other subsystem behavior. Then discard only the
+     * accumulated numerical translation error.
+     */
+    const result =
+      stepVesselV21Base(
+        vessel,
+        dt
+      );
+
+    if (
+      !postStepLockStillValidV21(
+        vessel,
+        lock
+      )
+    ) {
+      invalidateOrbitLockV21(
+        vessel,
+        "physical orbit-changing condition"
+      );
+
+      return result;
+    }
+
+    applyOrbitLockStateV21(
+      vessel,
+      lock,
+      prepared.endTime,
+      dt,
+      {
+        direct: false
+      }
+    );
+
+    return result;
+  };
+
+  const stepAllVesselsV21Base =
+    stepAllVessels;
+
+  stepAllVessels =
+  function stepAllVesselsV21(dt) {
+    try {
+      return stepAllVesselsV21Base(
+        dt
+      );
+    } finally {
+      runtime.orbitLockPreparedStepV21 =
+        null;
+    }
+  };
+
+  /* =======================================================================
+     Fixed telemetry invariants
+     ======================================================================= */
+
+  const orbitalElementsForObjectV21Base =
+    orbitalElementsForObject;
+
+  orbitalElementsForObject =
+  function orbitalElementsForObjectV21(
+    object,
+    referenceBody
+  ) {
+    const elements =
+      orbitalElementsForObjectV21Base(
+        object,
+        referenceBody
+      );
+
+    if (
+      !elements ||
+      !object ||
+      object.type !== "vessel"
+    ) {
+      return elements;
+    }
+
+    const lock =
+      orbitLocksV21.get(
+        object.id
+      );
+
+    if (
+      !lock ||
+      lock.referenceBodyId !==
+        referenceBody?.id
+    ) {
+      return elements;
+    }
+
+    return applyLockedInvariantsV21(
+      elements,
+      lock
+    );
+  };
+
+  /* =======================================================================
+     Explicit physical-event invalidation
+     ======================================================================= */
+
+  const activateNextStageV21Base =
+    activateNextStage;
+
+  activateNextStage =
+  function activateNextStageV21(vessel) {
+    invalidateOrbitLockV21(
+      vessel,
+      "stage activation"
+    );
+
+    return activateNextStageV21Base(
+      vessel
+    );
+  };
+
+  const splitDisconnectedVesselV21Base =
+    splitDisconnectedVessel;
+
+  splitDisconnectedVessel =
+  function splitDisconnectedVesselV21(
+    vessel,
+    options = {}
+  ) {
+    invalidateOrbitLockV21(
+      vessel,
+      options.reason ||
+      "vessel separation"
+    );
+
+    const separated =
+      splitDisconnectedVesselV21Base(
+        vessel,
+        options
+      );
+
+    invalidateOrbitLockV21(
+      vessel,
+      "post-separation state"
+    );
+
+    for (const item of separated || []) {
+      invalidateOrbitLockV21(
+        item,
+        "new separated vessel"
+      );
+    }
+
+    return separated;
+  };
+
+  const mergeDockedVesselsV21Base =
+    mergeDockedVessels;
+
+  mergeDockedVessels =
+  function mergeDockedVesselsV21(
+    vesselA,
+    vesselB,
+    portA,
+    portB
+  ) {
+    invalidateOrbitLockV21(
+      vesselA,
+      "docking merge"
+    );
+
+    invalidateOrbitLockV21(
+      vesselB,
+      "docking merge"
+    );
+
+    const merged =
+      mergeDockedVesselsV21Base(
+        vesselA,
+        vesselB,
+        portA,
+        portB
+      );
+
+    invalidateOrbitLockV21(
+      merged,
+      "new docked assembly"
+    );
+
+    return merged;
+  };
+
+  const undockPortV21Base =
+    undockPort;
+
+  undockPort =
+  function undockPortV21(
+    vessel,
+    partId
+  ) {
+    invalidateOrbitLockV21(
+      vessel,
+      "undocking"
+    );
+
+    const result =
+      undockPortV21Base(
+        vessel,
+        partId
+      );
+
+    if (result) {
+      for (const item of sim.vessels) {
+        if (
+          item.parts.some(
+            part =>
+              part.id === partId ||
+              part.runtime
+                ?.dockedPartId ===
+                partId
+          )
+        ) {
+          invalidateOrbitLockV21(
+            item,
+            "post-undock state"
+          );
+        }
+      }
+    }
+
+    return result;
+  };
+
+  const failPartV21Base =
+    failPart;
+
+  failPart =
+  function failPartV21(
+    vessel,
+    part,
+    reason
+  ) {
+    invalidateOrbitLockV21(
+      vessel,
+      reason ||
+      "part failure"
+    );
+
+    return failPartV21Base(
+      vessel,
+      part,
+      reason
+    );
+  };
+
+  const destroyVesselV21Base =
+    destroyVessel;
+
+  destroyVessel =
+  function destroyVesselV21(
+    vessel,
+    reason
+  ) {
+    invalidateOrbitLockV21(
+      vessel,
+      reason ||
+      "vessel destroyed"
+    );
+
+    return destroyVesselV21Base(
+      vessel,
+      reason
+    );
+  };
+
+  const removeVesselV21Base =
+    removeVessel;
+
+  removeVessel =
+  function removeVesselV21(
+    vesselOrId
+  ) {
+    invalidateOrbitLockV21(
+      vesselOrId,
+      "vessel removed"
+    );
+
+    return removeVesselV21Base(
+      vesselOrId
+    );
+  };
+
+  if (
+    typeof breakupVesselV5 ===
+    "function"
+  ) {
+    const breakupVesselV21Base =
+      breakupVesselV5;
+
+    breakupVesselV5 =
+    function breakupVesselV21(
+      vessel,
+      contact
+    ) {
+      invalidateOrbitLockV21(
+        vessel,
+        "vessel breakup"
+      );
+
+      return breakupVesselV21Base(
+        vessel,
+        contact
+      );
+    };
+  }
+
+  const setVesselThrottleV21Base =
+    setVesselThrottle;
+
+  setVesselThrottle =
+  function setVesselThrottleV21(
+    vessel,
+    value
+  ) {
+    if (
+      vessel &&
+      finiteV21(value) > 0 &&
+      vessel.parts.some(part => (
+        !part.destroyed &&
+        part.engineActive &&
+        Boolean(
+          getPartDef(part.defId)
+            ?.engine
+        )
+      ))
+    ) {
+      invalidateOrbitLockV21(
+        vessel,
+        "throttle applied"
+      );
+    }
+
+    return setVesselThrottleV21Base(
+      vessel,
+      value
+    );
+  };
+
+  /* =======================================================================
+     Diagnostics
+     ======================================================================= */
+
+  window.SolarProgram.orbitLockV21 = {
+    version:
+      PATCH_VERSION_V21,
+
+    getLocks() {
+      return [...orbitLocksV21.values()]
+        .map(lock => ({
+          vesselId:
+            lock.vesselId,
+
+          vesselName:
+            sim.vesselMap.get(
+              lock.vesselId
+            )?.name || "",
+
+          referenceBodyId:
+            lock.referenceBodyId,
+
+          referenceBodyName:
+            getBody(
+              lock.referenceBodyId
+            )?.name || "",
+
+          epochTime:
+            lock.epochTime,
+
+          semiMajorAxis:
+            lock.a,
+
+          eccentricity:
+            lock.e,
+
+          periapsis:
+            lock.periapsis,
+
+          apoapsis:
+            lock.apoapsis,
+
+          period:
+            lock.period
+        }));
+    },
+
+    getLock(
+      vesselId =
+        sim.activeVesselId
+    ) {
+      const lock =
+        orbitLocksV21.get(
+          vesselId
+        );
+
+      return lock
+        ? deepClone(lock)
+        : null;
+    },
+
+    invalidate(
+      vesselId =
+        sim.activeVesselId,
+      reason =
+        "manual diagnostic invalidation"
+    ) {
+      return invalidateOrbitLockV21(
+        vesselId,
+        reason
+      );
+    },
+
+    getLastEvent() {
+      return deepClone(
+        runtime
+          .lastOrbitLockEventV21 ||
+        null
+      );
+    },
+
+    getLastMismatch() {
+      return deepClone(
+        runtime
+          .lastOrbitLockMismatchV21 ||
+        null
+      );
+    }
+  };
+
+  runtime.orbitLockStageScrollPatchV21 =
+    true;
+
+  runtime.orbitLockStageScrollVersionV21 =
+    PATCH_VERSION_V21;
+})();
+
+/* SOLAR_ORBIT_LOCK_STAGE_SCROLL_V21_JS_END */
 </script>
 </body>
 </html>
