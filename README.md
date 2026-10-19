@@ -59,7 +59,7 @@ More specifically, it combines several genres:
 
 # Engineering/construction sandbox
 
-* Players assemble rockets from command modules, engines, tanks, aerodynamic surfaces, decouplers, docking ports, power systems, antennas, recovery equipment, and utility hardware (46 parts total).
+* Players assemble rockets from command modules, engines, tanks, aerodynamic surfaces, decouplers, docking ports, power systems, antennas, recovery equipment, and utility hardware (47 parts total).
 
 # Persistent mission-management game
 
