@@ -89418,6 +89418,3107 @@ initializeApplication();
 })();
 
 /* SOLAR_ORBIT_LOCK_STAGE_SCROLL_V21_JS_END */
+
+/* SOLAR_PERSISTENT_PARENT_ORBIT_RAILS_V23_JS_BEGIN */
+
+/* ==========================================================================
+   SOLAR PROGRAM PERSISTENT PARENT ORBIT RAILS V23
+
+   Purpose:
+   - make parked, unpowered bound spacecraft use one immutable parent-relative
+     conic at every time-warp level
+   - preserve periapsis, apoapsis, semimajor axis, eccentricity, and parent
+     until a genuine orbit-changing event occurs
+   - protect active and inactive vessels equally
+   - support stars, planets, moons, dwarf planets, and finite-mass minor bodies
+   - prevent Earth, the Sun, or another body from stealing a stable moon orbit
+     through numerical drift or instantaneous acceleration-based reparenting
+
+   Protected behavior:
+   - celestial bodies keep their existing n-body simulation
+   - powered flight keeps its existing dynamic integration
+   - translational RCS keeps its existing dynamic integration
+   - atmospheric flight, drag, heating, parachutes, and contact remain dynamic
+   - docking, undocking, separation, staging, and breakup invalidate rails
+   - transfer/encounter trajectories managed toward another body can continue
+     through the existing patched-conic/n-body transition behavior
+   - no visible UI, control, save-schema, or audio behavior is changed
+   ========================================================================== */
+
+(function installPersistentParentOrbitRailsV23() {
+  "use strict";
+
+  if (runtime.persistentParentOrbitRailsPatchV23) return;
+
+  const PATCH_VERSION_V23 = "23.0";
+
+  const MINIMUM_SAFE_DYNAMIC_STEP_V23 = 0.05;
+  const MAXIMUM_SAFE_DYNAMIC_STEP_V23 = 5;
+  const ORBIT_SAMPLES_PER_SAFE_STEP_V23 = 4096;
+
+  const MINIMUM_SURFACE_CLEARANCE_V23 = 100;
+  const EXTENT_CLEARANCE_FACTOR_V23 = 4;
+
+  const MINIMUM_INFLUENCE_RADIUS_FACTOR_V23 = 20;
+  const FALLBACK_INFLUENCE_RADIUS_FACTOR_V23 = 40;
+  const CAPTURE_INFLUENCE_FRACTION_V23 = 0.85;
+  const CURRENT_INFLUENCE_FRACTION_V23 = 0.95;
+
+  const POSITION_MATCH_FLOOR_V23 = 0.5;
+  const POSITION_MATCH_RELATIVE_V23 = 1e-11;
+
+  const VELOCITY_MATCH_FLOOR_V23 = 1e-4;
+  const VELOCITY_MATCH_RELATIVE_V23 = 1e-8;
+
+  const ENCOUNTER_RADIUS_FACTOR_V23 = 4;
+  const MAXIMUM_ENCOUNTER_RADIUS_FACTOR_V23 = 500;
+
+  const TERMINAL_TRANSFER_PLAN_STATES_V23 = new Set([
+    "canceled",
+    "arrived",
+    "encounter-complete",
+    "failed",
+    "departure-aborted"
+  ]);
+
+  const railsV23 = (
+    runtime.persistentParentOrbitRailsV23 instanceof Map
+      ? runtime.persistentParentOrbitRailsV23
+      : new Map()
+  );
+
+  runtime.persistentParentOrbitRailsV23 = railsV23;
+  runtime.preparedParentOrbitRailsV23 = null;
+  runtime.lastParentOrbitRailEventV23 = null;
+  runtime.lastParentOrbitRailMismatchV23 = null;
+
+  function finiteV23(value, fallback = 0) {
+    const number = Number(value);
+
+    return Number.isFinite(number)
+      ? number
+      : fallback;
+  }
+
+  function bodyIsValidParentV23(body) {
+    return Boolean(
+      body &&
+      !body.destroyed &&
+      hasFiniteKinematics(body) &&
+      finiteV23(body.mass) > 0 &&
+      finiteV23(body.radius) > 0
+    );
+  }
+
+  function vesselAggregateV23(vessel) {
+    if (!vessel.aggregate) {
+      computeVesselAggregate(
+        vessel,
+        false
+      );
+    }
+
+    return vessel.aggregate;
+  }
+
+  function clearLegacyOrbitLocksV23() {
+    if (runtime.orbitLocksV21 instanceof Map) {
+      runtime.orbitLocksV21.clear();
+    }
+
+    for (const vessel of sim.vessels || []) {
+      vessel.orbitLockedV21 = false;
+    }
+  }
+
+  function invalidateRailV23(
+    vesselOrId,
+    reason = "invalidated"
+  ) {
+    const vesselId = (
+      typeof vesselOrId === "string"
+        ? vesselOrId
+        : vesselOrId?.id
+    );
+
+    if (!vesselId) return false;
+
+    const existed =
+      railsV23.delete(vesselId);
+
+    const vessel =
+      sim.vesselMap.get(vesselId);
+
+    if (vessel) {
+      vessel.orbitLockedV23 = false;
+      vessel.orbitRailReasonV23 = reason;
+    }
+
+    if (existed) {
+      runtime.lastParentOrbitRailEventV23 = {
+        type: "released",
+        vesselId,
+        reason,
+        time: sim.time
+      };
+    }
+
+    return existed;
+  }
+
+  function clearAllRailsV23(
+    reason = "simulation state reset"
+  ) {
+    if (railsV23.size) {
+      runtime.lastParentOrbitRailEventV23 = {
+        type: "cleared",
+        reason,
+        count: railsV23.size,
+        time: sim.time
+      };
+    }
+
+    railsV23.clear();
+
+    for (const vessel of sim.vessels || []) {
+      vessel.orbitLockedV23 = false;
+      vessel.orbitRailReasonV23 = reason;
+    }
+
+    runtime.preparedParentOrbitRailsV23 = null;
+  }
+
+  function engineActuallyProducingThrustV23(vessel) {
+    let thrustRequested = false;
+
+    for (const part of vessel.parts || []) {
+      if (
+        part.destroyed ||
+        part.enabled === false ||
+        !part.engineActive
+      ) {
+        continue;
+      }
+
+      const engine =
+        getPartDef(part.defId)?.engine;
+
+      if (!engine) continue;
+
+      const throttle =
+        engine.throttleable
+          ? saturate(vessel.throttle)
+          : 1;
+
+      if (
+        !engine.throttleable ||
+        throttle > 1e-8
+      ) {
+        thrustRequested = true;
+        break;
+      }
+    }
+
+    if (!thrustRequested) return false;
+
+    /*
+     * This evaluator is virtual and does not consume propellant. It avoids
+     * releasing a rail merely because an exhausted engine remains flagged
+     * active.
+     */
+    if (
+      typeof evaluateEngineSolutionV51 === "function"
+    ) {
+      try {
+        const solution =
+          evaluateEngineSolutionV51(
+            vessel,
+            1 / 60,
+            0,
+            0
+          );
+
+        return Boolean(
+          finiteV23(solution?.totalThrust) > 1e-4 &&
+          finiteV23(solution?.fueledEngineCount) > 0
+        );
+      } catch (error) {
+        /*
+         * Unknown imported propulsion is handled conservatively.
+         */
+        console.warn(
+          "V23 virtual thrust evaluation failed; releasing orbit rail:",
+          error
+        );
+
+        return true;
+      }
+    }
+
+    return true;
+  }
+
+  function translationalRcsActiveV23(vessel) {
+    if (
+      !vessel.rcsEnabled ||
+      !vessel.rcsTranslationModeV9
+    ) {
+      return false;
+    }
+
+    const forward =
+      Math.abs(
+        finiteV23(
+          vessel.control?.rcsTranslateForwardV9
+        )
+      );
+
+    const right =
+      Math.abs(
+        finiteV23(
+          vessel.control?.rcsTranslateRightV9
+        )
+      );
+
+    return (
+      forward > 1e-8 ||
+      right > 1e-8
+    );
+  }
+
+  function coastBlockingReasonV23(vessel) {
+    if (
+      !vessel ||
+      vessel.destroyed ||
+      !sim.vesselMap.has(vessel.id) ||
+      !hasFiniteKinematics(vessel)
+    ) {
+      return "vessel unavailable";
+    }
+
+    if (
+      vessel.surfaceLinkV5 ||
+      vessel.landed
+    ) {
+      return "surface linked";
+    }
+
+    if (
+      engineActuallyProducingThrustV23(vessel)
+    ) {
+      return "engine thrust";
+    }
+
+    if (
+      translationalRcsActiveV23(vessel)
+    ) {
+      return "translational RCS";
+    }
+
+    return null;
+  }
+
+  function ancestryIdsV23(body) {
+    const result = new Set();
+    let current = body;
+
+    while (
+      current &&
+      !result.has(current.id)
+    ) {
+      result.add(current.id);
+
+      current =
+        current.parentId
+          ? getBody(current.parentId)
+          : null;
+    }
+
+    return result;
+  }
+
+  function bodyInfluenceLimitV23(body) {
+    if (
+      !body?.parentId ||
+      !body.orbit
+    ) {
+      return Infinity;
+    }
+
+    const radius =
+      Math.max(
+        1,
+        finiteV23(body.radius, 1)
+      );
+
+    const candidates = [];
+
+    try {
+      const hill = hillRadius(body);
+
+      if (
+        Number.isFinite(hill) &&
+        hill > radius
+      ) {
+        candidates.push(hill);
+      }
+    } catch (_) {
+      // Use the remaining estimate.
+    }
+
+    try {
+      const soi =
+        sphereOfInfluenceApprox(body);
+
+      if (
+        Number.isFinite(soi) &&
+        soi > radius
+      ) {
+        candidates.push(soi);
+      }
+    } catch (_) {
+      // Use the remaining estimate.
+    }
+
+    if (!candidates.length) {
+      return (
+        radius *
+        FALLBACK_INFLUENCE_RADIUS_FACTOR_V23
+      );
+    }
+
+    return Math.max(
+      radius *
+      MINIMUM_INFLUENCE_RADIUS_FACTOR_V23,
+      Math.min(...candidates)
+    );
+  }
+
+  function bodyEncounterEnvelopeV23(body) {
+    const radius =
+      Math.max(
+        1,
+        finiteV23(body?.radius, 1)
+      );
+
+    const influence =
+      bodyInfluenceLimitV23(body);
+
+    if (!Number.isFinite(influence)) {
+      return (
+        radius *
+        ENCOUNTER_RADIUS_FACTOR_V23
+      );
+    }
+
+    return Math.max(
+      radius *
+      ENCOUNTER_RADIUS_FACTOR_V23,
+
+      Math.min(
+        influence * 0.90,
+        radius *
+        MAXIMUM_ENCOUNTER_RADIUS_FACTOR_V23
+      )
+    );
+  }
+
+  function activeTransferTargetsV23(vessel) {
+    const result = new Map();
+
+    if (sim.target?.type === "body") {
+      const target =
+        getBody(sim.target.id);
+
+      if (target) {
+        result.set(target.id, target);
+      }
+    }
+
+    for (const plan of sim.transferPlansV9 || []) {
+      if (
+        !plan ||
+        plan.vesselId !== vessel.id ||
+        TERMINAL_TRANSFER_PLAN_STATES_V23.has(
+          String(plan.status || "")
+        )
+      ) {
+        continue;
+      }
+
+      const target =
+        getBody(plan.targetBodyId);
+
+      if (target) {
+        result.set(target.id, target);
+      }
+    }
+
+    return [...result.values()];
+  }
+
+  function branchBodyBelowParentV23(
+    target,
+    parent
+  ) {
+    if (
+      !target ||
+      !parent ||
+      target.id === parent.id
+    ) {
+      return null;
+    }
+
+    let current = target;
+    const seen = new Set();
+
+    while (
+      current &&
+      !seen.has(current.id)
+    ) {
+      seen.add(current.id);
+
+      if (
+        current.parentId === parent.id
+      ) {
+        return current;
+      }
+
+      current =
+        current.parentId
+          ? getBody(current.parentId)
+          : null;
+    }
+
+    return null;
+  }
+
+  function targetIsAncestorOfParentV23(
+    target,
+    parent
+  ) {
+    let current = parent;
+    const seen = new Set();
+
+    while (
+      current &&
+      !seen.has(current.id)
+    ) {
+      if (current.id === target.id) {
+        return true;
+      }
+
+      seen.add(current.id);
+
+      current =
+        current.parentId
+          ? getBody(current.parentId)
+          : null;
+    }
+
+    return false;
+  }
+
+  /*
+   * A transfer aimed at a child body should remain under the existing
+   * encounter-transition model rather than being mistaken for a permanent
+   * parking orbit around the current parent.
+   *
+   * This is evaluated only for an explicitly targeted or solver-managed
+   * transfer body. Merely having unrelated catalog bodies at similar orbital
+   * radii does not disable an otherwise valid parking orbit.
+   */
+  function trajectoryConflictsWithTransferTargetV23(
+    vessel,
+    parent,
+    periapsis,
+    apoapsis
+  ) {
+    for (const target of
+         activeTransferTargetsV23(vessel)) {
+      if (
+        target.id === parent.id ||
+        targetIsAncestorOfParentV23(
+          target,
+          parent
+        )
+      ) {
+        continue;
+      }
+
+      const corridorBody =
+        branchBodyBelowParentV23(
+          target,
+          parent
+        );
+
+      if (
+        !corridorBody ||
+        !corridorBody.orbit
+      ) {
+        continue;
+      }
+
+      const envelope =
+        bodyEncounterEnvelopeV23(
+          corridorBody
+        );
+
+      const targetMinimum =
+        corridorBody.orbit.a *
+        (
+          1 -
+          corridorBody.orbit.e
+        ) -
+        envelope;
+
+      const targetMaximum =
+        corridorBody.orbit.a *
+        (
+          1 +
+          corridorBody.orbit.e
+        ) +
+        envelope;
+
+      const overlaps = !(
+        apoapsis < targetMinimum ||
+        periapsis > targetMaximum
+      );
+
+      if (overlaps) {
+        return {
+          target,
+          corridorBody,
+          targetMinimum,
+          targetMaximum
+        };
+      }
+    }
+
+    return null;
+  }
+
+  function encounterCandidatesV23(
+    vessel,
+    parent
+  ) {
+    const result = new Map();
+
+    for (const body of sim.gravitySources || []) {
+      if (body?.id) {
+        result.set(body.id, body);
+      }
+    }
+
+    /*
+     * Include a targeted low-mass body even when it is intentionally absent
+     * from sim.gravitySources.
+     */
+    for (const target of
+         activeTransferTargetsV23(vessel)) {
+      result.set(target.id, target);
+
+      const branch =
+        branchBodyBelowParentV23(
+          target,
+          parent
+        );
+
+      if (branch) {
+        result.set(branch.id, branch);
+      }
+    }
+
+    for (const body of sim.bodies || []) {
+      if (
+        body.parentId === parent.id &&
+        body.gravitySource
+      ) {
+        result.set(body.id, body);
+      }
+    }
+
+    return [...result.values()];
+  }
+
+  function currentForeignEncounterV23(
+    vessel,
+    parent
+  ) {
+    const ancestry =
+      ancestryIdsV23(parent);
+
+    for (const body of
+         encounterCandidatesV23(
+           vessel,
+           parent
+         )) {
+      if (
+        !bodyIsValidParentV23(body) ||
+        body.id === parent.id ||
+        ancestry.has(body.id)
+      ) {
+        continue;
+      }
+
+      const separation =
+        distance(
+          vessel.x,
+          vessel.y,
+          body.x,
+          body.y
+        );
+
+      const envelope =
+        bodyEncounterEnvelopeV23(body);
+
+      if (separation <= envelope) {
+        return {
+          body,
+          separation,
+          envelope
+        };
+      }
+    }
+
+    return null;
+  }
+
+  function minimumPeriapsisV23(
+    vessel,
+    body
+  ) {
+    const atmosphereHeight =
+      Math.max(
+        0,
+        finiteV23(
+          body.atmosphere?.height
+        )
+      );
+
+    const terrainHeight =
+      bodyIsLandableV5(body)
+        ? Math.max(
+            0,
+            finiteV23(
+              body.terrainAmplitude
+            )
+          )
+        : 0;
+
+    const extent =
+      Math.max(
+        1,
+        finiteV23(
+          vessel.aggregate?.extent,
+          1
+        )
+      );
+
+    return (
+      body.radius +
+      atmosphereHeight +
+      terrainHeight +
+      Math.max(
+        MINIMUM_SURFACE_CLEARANCE_V23,
+        extent *
+        EXTENT_CLEARANCE_FACTOR_V23
+      )
+    );
+  }
+
+  function rawOrbitCandidateV23(
+    vessel,
+    body
+  ) {
+    if (
+      !bodyIsValidParentV23(body)
+    ) {
+      return null;
+    }
+
+    const aggregate =
+      vesselAggregateV23(vessel);
+
+    const state =
+      relativeState(
+        vessel,
+        body
+      );
+
+    const radius =
+      Math.max(
+        1,
+        hypot2(
+          state.x,
+          state.y
+        )
+      );
+
+    const influence =
+      bodyInfluenceLimitV23(body);
+
+    if (
+      Number.isFinite(influence) &&
+      radius >
+        influence *
+        CURRENT_INFLUENCE_FRACTION_V23
+    ) {
+      return null;
+    }
+
+    const mu =
+      gravitationalParameter(
+        body,
+        finiteV23(aggregate?.mass)
+      );
+
+    const elements =
+      orbitalElementsFromRelativeState(
+        state.x,
+        state.y,
+        state.vx,
+        state.vy,
+        mu
+      );
+
+    if (
+      !elements ||
+      !elements.bound ||
+      !Number.isFinite(
+        elements.semiMajorAxis
+      ) ||
+      !Number.isFinite(
+        elements.period
+      ) ||
+      !Number.isFinite(
+        elements.periapsis
+      ) ||
+      !Number.isFinite(
+        elements.apoapsis
+      ) ||
+      elements.semiMajorAxis <= 0 ||
+      elements.eccentricity < 0 ||
+      elements.eccentricity >= 0.995
+    ) {
+      return null;
+    }
+
+    if (
+      elements.periapsis <=
+      minimumPeriapsisV23(
+        vessel,
+        body
+      )
+    ) {
+      return null;
+    }
+
+    if (
+      Number.isFinite(influence) &&
+      elements.apoapsis >=
+        influence *
+        CAPTURE_INFLUENCE_FRACTION_V23
+    ) {
+      return null;
+    }
+
+    const atmosphere =
+      getAtmosphereState(
+        body,
+        radius - body.radius
+      );
+
+    if (atmosphere.inside) {
+      return null;
+    }
+
+    if (
+      currentForeignEncounterV23(
+        vessel,
+        body
+      )
+    ) {
+      return null;
+    }
+
+    if (
+      trajectoryConflictsWithTransferTargetV23(
+        vessel,
+        body,
+        elements.periapsis,
+        elements.apoapsis
+      )
+    ) {
+      return null;
+    }
+
+    return {
+      body,
+      aggregate,
+      state,
+      radius,
+      influence,
+      mu,
+      elements
+    };
+  }
+
+  function candidateParentBodiesV23(
+    vessel
+  ) {
+    const candidates = [];
+    const seen = new Set();
+
+    function add(body) {
+      if (
+        !body ||
+        seen.has(body.id) ||
+        !bodyIsValidParentV23(body)
+      ) {
+        return;
+      }
+
+      seen.add(body.id);
+      candidates.push(body);
+    }
+
+    if (vessel.referenceBodyId) {
+      add(
+        getBody(
+          vessel.referenceBodyId
+        )
+      );
+    }
+
+    try {
+      add(
+        findReferenceBody(vessel)
+      );
+    } catch (_) {
+      // Continue with explicit catalog candidates.
+    }
+
+    for (const target of
+         activeTransferTargetsV23(vessel)) {
+      add(target);
+    }
+
+    /*
+     * This scan occurs only when a rail is first acquired or reacquired, not
+     * on every locked physics substep. It allows finite-mass moons, dwarf
+     * planets, and supported minor bodies to become authoritative parents
+     * even if they are intentionally excluded from global gravity sources.
+     */
+    for (const body of sim.bodies || []) {
+      add(body);
+    }
+
+    return candidates;
+  }
+
+  function chooseParentOrbitV23(vessel) {
+    const blockingReason =
+      coastBlockingReasonV23(vessel);
+
+    if (blockingReason) {
+      return null;
+    }
+
+    let best = null;
+
+    for (const body of
+         candidateParentBodiesV23(vessel)) {
+      const candidate =
+        rawOrbitCandidateV23(
+          vessel,
+          body
+        );
+
+      if (!candidate) continue;
+
+      /*
+       * The shortest valid bound period identifies the deepest local parent:
+       * Moon over Earth, Earth over Sun, Ceres over Sun, and so forth.
+       */
+      let score =
+        candidate.elements.period;
+
+      if (
+        body.id ===
+        vessel.referenceBodyId
+      ) {
+        score *= 0.999999;
+      }
+
+      if (
+        !best ||
+        score < best.score
+      ) {
+        best = {
+          ...candidate,
+          score
+        };
+      }
+    }
+
+    return best;
+  }
+
+  function captureRailV23(
+    vessel,
+    candidate
+  ) {
+    const {
+      body,
+      state,
+      mu,
+      elements
+    } = candidate;
+
+    const a =
+      elements.semiMajorAxis;
+
+    const e =
+      elements.eccentricity;
+
+    const radius =
+      Math.max(
+        1,
+        hypot2(
+          state.x,
+          state.y
+        )
+      );
+
+    const direction =
+      elements.angularMomentum >= 0
+        ? 1
+        : -1;
+
+    let p;
+
+    if (e > 1e-12) {
+      p = normalized(
+        elements.eccentricityX,
+        elements.eccentricityY,
+        state.x / radius,
+        state.y / radius
+      );
+    } else {
+      p = normalized(
+        state.x,
+        state.y
+      );
+    }
+
+    const q =
+      direction > 0
+        ? {
+            x: -p.y,
+            y: p.x
+          }
+        : {
+            x: p.y,
+            y: -p.x
+          };
+
+    const root =
+      Math.sqrt(
+        Math.max(
+          1e-15,
+          1 - e * e
+        )
+      );
+
+    const cosineE =
+      clamp(
+        dot(
+          state.x,
+          state.y,
+          p.x,
+          p.y
+        ) /
+        Math.max(
+          1e-15,
+          a
+        ) +
+        e,
+        -1,
+        1
+      );
+
+    const sineE =
+      clamp(
+        dot(
+          state.x,
+          state.y,
+          q.x,
+          q.y
+        ) /
+        Math.max(
+          1e-15,
+          a * root
+        ),
+        -1,
+        1
+      );
+
+    const eccentricAnomaly =
+      Math.atan2(
+        sineE,
+        cosineE
+      );
+
+    const meanAnomaly =
+      wrapAngle(
+        eccentricAnomaly -
+        e *
+        Math.sin(
+          eccentricAnomaly
+        )
+      );
+
+    const meanMotion =
+      Math.sqrt(
+        mu /
+        (a * a * a)
+      );
+
+    const rail = {
+      version:
+        PATCH_VERSION_V23,
+
+      vesselId:
+        vessel.id,
+
+      referenceBodyId:
+        body.id,
+
+      referenceBodyName:
+        body.name,
+
+      epochTime:
+        sim.time,
+
+      a,
+      e,
+
+      pX:
+        p.x,
+
+      pY:
+        p.y,
+
+      qX:
+        q.x,
+
+      qY:
+        q.y,
+
+      root,
+
+      direction,
+
+      mu,
+
+      meanAnomaly,
+
+      meanMotion,
+
+      periapsis:
+        a * (1 - e),
+
+      apoapsis:
+        a * (1 + e),
+
+      period:
+        TWO_PI /
+        meanMotion,
+
+      longitudeOfPeriapsis:
+        Math.atan2(
+          p.y,
+          p.x
+        ),
+
+      capturedAt:
+        sim.time,
+
+      revision:
+        Math.max(
+          0,
+          Math.round(
+            finiteV23(
+              vessel.orbitRailRevisionV23
+            )
+          )
+        ) + 1
+    };
+
+    vessel.orbitRailRevisionV23 =
+      rail.revision;
+
+    vessel.orbitLockedV23 = true;
+
+    vessel.orbitRailReasonV23 =
+      "stable unpowered parent-relative coast";
+
+    railsV23.set(
+      vessel.id,
+      rail
+    );
+
+    runtime.lastParentOrbitRailEventV23 = {
+      type: "captured",
+      vesselId:
+        vessel.id,
+      vesselName:
+        vessel.name,
+      referenceBodyId:
+        body.id,
+      referenceBodyName:
+        body.name,
+      periapsis:
+        rail.periapsis,
+      apoapsis:
+        rail.apoapsis,
+      period:
+        rail.period,
+      time:
+        sim.time
+    };
+
+    return rail;
+  }
+
+  function lockedRelativeStateV23(
+    rail,
+    time
+  ) {
+    const meanAnomaly =
+      rail.meanAnomaly +
+      rail.meanMotion *
+      (
+        time -
+        rail.epochTime
+      );
+
+    const eccentricAnomaly =
+      solveKepler(
+        meanAnomaly,
+        rail.e
+      );
+
+    const cosineE =
+      Math.cos(
+        eccentricAnomaly
+      );
+
+    const sineE =
+      Math.sin(
+        eccentricAnomaly
+      );
+
+    const denominator =
+      Math.max(
+        1e-12,
+        1 -
+        rail.e *
+        cosineE
+      );
+
+    const eccentricRate =
+      rail.meanMotion /
+      denominator;
+
+    const x =
+      rail.a *
+      (
+        cosineE -
+        rail.e
+      ) *
+      rail.pX +
+      rail.a *
+      rail.root *
+      sineE *
+      rail.qX;
+
+    const y =
+      rail.a *
+      (
+        cosineE -
+        rail.e
+      ) *
+      rail.pY +
+      rail.a *
+      rail.root *
+      sineE *
+      rail.qY;
+
+    const vx =
+      -rail.a *
+      sineE *
+      eccentricRate *
+      rail.pX +
+      rail.a *
+      rail.root *
+      cosineE *
+      eccentricRate *
+      rail.qX;
+
+    const vy =
+      -rail.a *
+      sineE *
+      eccentricRate *
+      rail.pY +
+      rail.a *
+      rail.root *
+      cosineE *
+      eccentricRate *
+      rail.qY;
+
+    return {
+      x,
+      y,
+      vx,
+      vy,
+      eccentricAnomaly,
+      meanAnomaly
+    };
+  }
+
+  function stateMatchesRailV23(
+    vessel,
+    parent,
+    rail
+  ) {
+    const expected =
+      lockedRelativeStateV23(
+        rail,
+        sim.time
+      );
+
+    const actual =
+      relativeState(
+        vessel,
+        parent
+      );
+
+    const positionError =
+      hypot2(
+        actual.x -
+        expected.x,
+        actual.y -
+        expected.y
+      );
+
+    const velocityError =
+      hypot2(
+        actual.vx -
+        expected.vx,
+        actual.vy -
+        expected.vy
+      );
+
+    const positionTolerance =
+      Math.max(
+        POSITION_MATCH_FLOOR_V23,
+        rail.a *
+        POSITION_MATCH_RELATIVE_V23
+      );
+
+    const characteristicSpeed =
+      Math.sqrt(
+        rail.mu /
+        Math.max(
+          1,
+          rail.a
+        )
+      );
+
+    const velocityTolerance =
+      Math.max(
+        VELOCITY_MATCH_FLOOR_V23,
+        characteristicSpeed *
+        VELOCITY_MATCH_RELATIVE_V23
+      );
+
+    return {
+      matches:
+        positionError <=
+          positionTolerance &&
+        velocityError <=
+          velocityTolerance,
+
+      positionError,
+      velocityError,
+      positionTolerance,
+      velocityTolerance
+    };
+  }
+
+  function applyRailInvariantsV23(
+    elements,
+    rail
+  ) {
+    if (
+      !elements ||
+      !rail
+    ) {
+      return elements;
+    }
+
+    elements.semiMajorAxis =
+      rail.a;
+
+    elements.eccentricity =
+      rail.e;
+
+    elements.eccentricityX =
+      rail.e *
+      rail.pX;
+
+    elements.eccentricityY =
+      rail.e *
+      rail.pY;
+
+    elements.longitudeOfPeriapsis =
+      rail.longitudeOfPeriapsis;
+
+    elements.periapsis =
+      rail.periapsis;
+
+    elements.apoapsis =
+      rail.apoapsis;
+
+    elements.period =
+      rail.period;
+
+    elements.angularMomentum =
+      rail.direction *
+      Math.sqrt(
+        Math.max(
+          0,
+          rail.mu *
+          rail.a *
+          (
+            1 -
+            rail.e *
+            rail.e
+          )
+        )
+      );
+
+    elements.specificEnergy =
+      -rail.mu /
+      (
+        2 *
+        rail.a
+      );
+
+    elements.bound = true;
+
+    elements.retrograde =
+      rail.direction < 0;
+
+    return elements;
+  }
+
+  function lockedOrbitElementsV23(
+    vessel,
+    parent,
+    rail
+  ) {
+    const state =
+      relativeState(
+        vessel,
+        parent
+      );
+
+    const elements =
+      orbitalElementsFromRelativeState(
+        state.x,
+        state.y,
+        state.vx,
+        state.vy,
+        rail.mu
+      );
+
+    return applyRailInvariantsV23(
+      elements,
+      rail
+    );
+  }
+
+  function updateLockedTelemetryV23(
+    vessel,
+    parent,
+    rail
+  ) {
+    const relative =
+      relativeState(
+        vessel,
+        parent
+      );
+
+    const radius =
+      Math.max(
+        1,
+        hypot2(
+          relative.x,
+          relative.y
+        )
+      );
+
+    const radial = {
+      x:
+        relative.x /
+        radius,
+
+      y:
+        relative.y /
+        radius
+    };
+
+    const tangent = {
+      x:
+        -radial.y,
+
+      y:
+        radial.x
+    };
+
+    const surfaceVelocity =
+      bodySurfaceVelocityAtPoint(
+        parent,
+        vessel.x,
+        vessel.y
+      );
+
+    const surfaceVx =
+      vessel.vx -
+      surfaceVelocity.x;
+
+    const surfaceVy =
+      vessel.vy -
+      surfaceVelocity.y;
+
+    const altitude =
+      radius -
+      parent.radius;
+
+    const atmosphere =
+      getAtmosphereState(
+        parent,
+        altitude
+      );
+
+    vessel.referenceBodyId =
+      parent.id;
+
+    vessel.environment.bodyId =
+      parent.id;
+
+    vessel.environment.altitude =
+      altitude;
+
+    vessel.environment.radarAltitude =
+      altitude;
+
+    vessel.environment.density =
+      atmosphere.density;
+
+    vessel.environment.pressure =
+      atmosphere.pressure;
+
+    vessel.environment.temperature =
+      atmosphere.temperature;
+
+    vessel.environment.speedOfSound =
+      atmosphere.speedOfSound;
+
+    vessel.environment.relativeSpeed =
+      hypot2(
+        relative.vx,
+        relative.vy
+      );
+
+    vessel.environment.mach = 0;
+    vessel.environment.dynamicPressure = 0;
+    vessel.environment.heatFlux = 0;
+
+    vessel.telemetry.verticalSpeed =
+      dot(
+        surfaceVx,
+        surfaceVy,
+        radial.x,
+        radial.y
+      );
+
+    vessel.telemetry.horizontalSpeed =
+      dot(
+        surfaceVx,
+        surfaceVy,
+        tangent.x,
+        tangent.y
+      );
+
+    vessel.telemetry.surfaceSpeed =
+      hypot2(
+        surfaceVx,
+        surfaceVy
+      );
+
+    vessel.telemetry.thrust = 0;
+    vessel.telemetry.massFlow = 0;
+    vessel.telemetry.drag = 0;
+    vessel.telemetry.lift = 0;
+    vessel.telemetry.gForce = 0;
+
+    vessel.telemetry.acceleration =
+      rail.mu /
+      (
+        radius *
+        radius
+      );
+
+    vessel.orbit =
+      lockedOrbitElementsV23(
+        vessel,
+        parent,
+        rail
+      );
+  }
+
+  function applyRailStateV23(
+    vessel,
+    rail,
+    endTime,
+    dt,
+    {
+      direct = false
+    } = {}
+  ) {
+    const parent =
+      getBody(
+        rail.referenceBodyId
+      );
+
+    if (
+      !bodyIsValidParentV23(parent)
+    ) {
+      invalidateRailV23(
+        vessel,
+        "parent body unavailable"
+      );
+
+      return false;
+    }
+
+    if (
+      !vessel.aggregate ||
+      vessel.dirty
+    ) {
+      computeVesselAggregate(
+        vessel,
+        false
+      );
+
+      vessel.dirty = false;
+    }
+
+    const previousX =
+      vessel.x;
+
+    const previousY =
+      vessel.y;
+
+    const relative =
+      lockedRelativeStateV23(
+        rail,
+        endTime
+      );
+
+    if (direct) {
+      vessel.previousX =
+        previousX;
+
+      vessel.previousY =
+        previousY;
+
+      vessel.angle =
+        wrapAngle(
+          vessel.angle +
+          vessel.angularVelocity *
+          dt
+        );
+
+      vessel.angularAcceleration = 0;
+    }
+
+    vessel.x =
+      parent.x +
+      relative.x;
+
+    vessel.y =
+      parent.y +
+      relative.y;
+
+    vessel.vx =
+      parent.vx +
+      relative.vx;
+
+    vessel.vy =
+      parent.vy +
+      relative.vy;
+
+    vessel.renderX =
+      vessel.x;
+
+    vessel.renderY =
+      vessel.y;
+
+    const radiusSquared =
+      Math.max(
+        1,
+        relative.x *
+        relative.x +
+        relative.y *
+        relative.y
+      );
+
+    const inverseRadius =
+      1 /
+      Math.sqrt(
+        radiusSquared
+      );
+
+    const centralFactor =
+      -rail.mu *
+      inverseRadius /
+      radiusSquared;
+
+    vessel.ax =
+      finiteV23(parent.ax) +
+      relative.x *
+      centralFactor;
+
+    vessel.ay =
+      finiteV23(parent.ay) +
+      relative.y *
+      centralFactor;
+
+    if (direct) {
+      updateVesselPower(
+        vessel,
+        dt
+      );
+
+      vessel.control.available =
+        vesselCanControl(vessel);
+
+      vessel.lastPhysicsTime =
+        endTime;
+
+      sim.vesselSteps += 1;
+    }
+
+    updateLockedTelemetryV23(
+      vessel,
+      parent,
+      rail
+    );
+
+    vessel.orbitLockedV23 = true;
+
+    vessel.orbitRailReasonV23 =
+      "stable unpowered parent-relative coast";
+
+    return true;
+  }
+
+  function railRemainsValidBeforeStepV23(
+    vessel,
+    rail
+  ) {
+    const blockingReason =
+      coastBlockingReasonV23(vessel);
+
+    if (blockingReason) {
+      return {
+        valid: false,
+        reason: blockingReason
+      };
+    }
+
+    const parent =
+      getBody(
+        rail.referenceBodyId
+      );
+
+    if (
+      !bodyIsValidParentV23(parent)
+    ) {
+      return {
+        valid: false,
+        reason: "parent body unavailable"
+      };
+    }
+
+    const atmosphere =
+      getAtmosphereState(
+        parent,
+        bodyAltitudeAtPoint(
+          parent,
+          vessel.x,
+          vessel.y
+        )
+      );
+
+    if (atmosphere.inside) {
+      return {
+        valid: false,
+        reason: "atmospheric entry"
+      };
+    }
+
+    const transferConflict =
+      trajectoryConflictsWithTransferTargetV23(
+        vessel,
+        parent,
+        rail.periapsis,
+        rail.apoapsis
+      );
+
+    if (transferConflict) {
+      return {
+        valid: false,
+        reason:
+          `transfer encounter with ${transferConflict.target.name}`
+      };
+    }
+
+    const encounter =
+      currentForeignEncounterV23(
+        vessel,
+        parent
+      );
+
+    if (encounter) {
+      return {
+        valid: false,
+        reason:
+          `entered ${encounter.body.name}'s encounter region`
+      };
+    }
+
+    const match =
+      stateMatchesRailV23(
+        vessel,
+        parent,
+        rail
+      );
+
+    if (!match.matches) {
+      runtime.lastParentOrbitRailMismatchV23 = {
+        vesselId:
+          vessel.id,
+
+        vesselName:
+          vessel.name,
+
+        referenceBodyId:
+          parent.id,
+
+        referenceBodyName:
+          parent.name,
+
+        time:
+          sim.time,
+
+        ...match
+      };
+
+      return {
+        valid: false,
+        reason: "physical state changed",
+        match
+      };
+    }
+
+    return {
+      valid: true,
+      parent,
+      match
+    };
+  }
+
+  function railRemainsValidAfterDynamicStepV23(
+    vessel,
+    rail
+  ) {
+    if (
+      !vessel ||
+      vessel.destroyed ||
+      !sim.vesselMap.has(vessel.id) ||
+      railsV23.get(vessel.id) !== rail
+    ) {
+      return {
+        valid: false,
+        reason: "vessel changed or was removed"
+      };
+    }
+
+    const blockingReason =
+      coastBlockingReasonV23(vessel);
+
+    if (blockingReason) {
+      return {
+        valid: false,
+        reason: blockingReason
+      };
+    }
+
+    const parent =
+      getBody(
+        rail.referenceBodyId
+      );
+
+    if (
+      !bodyIsValidParentV23(parent)
+    ) {
+      return {
+        valid: false,
+        reason: "parent body unavailable"
+      };
+    }
+
+    const atmosphere =
+      getAtmosphereState(
+        parent,
+        bodyAltitudeAtPoint(
+          parent,
+          vessel.x,
+          vessel.y
+        )
+      );
+
+    if (atmosphere.inside) {
+      return {
+        valid: false,
+        reason: "atmospheric entry"
+      };
+    }
+
+    const encounter =
+      currentForeignEncounterV23(
+        vessel,
+        parent
+      );
+
+    if (encounter) {
+      return {
+        valid: false,
+        reason:
+          `entered ${encounter.body.name}'s encounter region`
+      };
+    }
+
+    return {
+      valid: true,
+      parent
+    };
+  }
+
+  function prepareRailsV23(dt) {
+    const prepared = {
+      startTime:
+        sim.time,
+
+      endTime:
+        sim.time +
+        dt,
+
+      dt,
+
+      entries:
+        new Map()
+    };
+
+    for (const vesselId of
+         [...railsV23.keys()]) {
+      if (!sim.vesselMap.has(vesselId)) {
+        railsV23.delete(vesselId);
+      }
+    }
+
+    for (const vessel of sim.vessels) {
+      if (
+        !vessel ||
+        vessel.destroyed ||
+        !sim.vesselMap.has(vessel.id)
+      ) {
+        invalidateRailV23(
+          vessel,
+          "vessel unavailable"
+        );
+
+        continue;
+      }
+
+      let rail =
+        railsV23.get(
+          vessel.id
+        ) || null;
+
+      if (rail) {
+        const validation =
+          railRemainsValidBeforeStepV23(
+            vessel,
+            rail
+          );
+
+        if (!validation.valid) {
+          invalidateRailV23(
+            vessel,
+            validation.reason
+          );
+
+          rail = null;
+        }
+      }
+
+      if (!rail) {
+        const candidate =
+          chooseParentOrbitV23(
+            vessel
+          );
+
+        if (candidate) {
+          rail =
+            captureRailV23(
+              vessel,
+              candidate
+            );
+        }
+      }
+
+      if (rail) {
+        prepared.entries.set(
+          vessel.id,
+          {
+            rail,
+            referenceBodyId:
+              rail.referenceBodyId
+          }
+        );
+      } else {
+        vessel.orbitLockedV23 =
+          false;
+      }
+    }
+
+    runtime.preparedParentOrbitRailsV23 =
+      prepared;
+
+    return prepared;
+  }
+
+  /* =======================================================================
+     Final simulation wrappers
+     ======================================================================= */
+
+  const stepCelestialBodiesV23Base =
+    stepCelestialBodies;
+
+  stepCelestialBodies =
+  function stepCelestialBodiesV23(dt) {
+    if (
+      Number.isFinite(dt) &&
+      dt !== 0
+    ) {
+      prepareRailsV23(dt);
+    } else {
+      runtime.preparedParentOrbitRailsV23 =
+        null;
+    }
+
+    return stepCelestialBodiesV23Base(
+      dt
+    );
+  };
+
+  const stepVesselV23Base =
+    stepVessel;
+
+  stepVessel =
+  function stepVesselV23(
+    vessel,
+    dt
+  ) {
+    const prepared =
+      runtime
+        .preparedParentOrbitRailsV23;
+
+    const entry =
+      prepared
+        ?.entries
+        ?.get(vessel?.id);
+
+    const rail =
+      entry?.rail;
+
+    if (
+      !rail ||
+      !vessel ||
+      vessel.destroyed ||
+      railsV23.get(vessel.id) !==
+        rail
+    ) {
+      return stepVesselV23Base(
+        vessel,
+        dt
+      );
+    }
+
+    const safeStep =
+      clamp(
+        rail.period /
+        ORBIT_SAMPLES_PER_SAFE_STEP_V23,
+
+        MINIMUM_SAFE_DYNAMIC_STEP_V23,
+
+        MAXIMUM_SAFE_DYNAMIC_STEP_V23
+      );
+
+    const direct = Boolean(
+      Math.abs(dt) >
+        safeStep ||
+      runtime.highWarpRailsActiveV8 ||
+      runtime.ultraWarpActiveV53
+    );
+
+    if (direct) {
+      return applyRailStateV23(
+        vessel,
+        rail,
+        prepared.endTime,
+        dt,
+        {
+          direct: true
+        }
+      );
+    }
+
+    /*
+     * Preserve the existing low-step subsystem experience: SAS, reaction
+     * wheels, rotational RCS, electrical behavior, thermal behavior, and all
+     * other existing non-translation logic run normally. Only the numerical
+     * translational perturbation is discarded afterward.
+     */
+    const result =
+      stepVesselV23Base(
+        vessel,
+        dt
+      );
+
+    const validation =
+      railRemainsValidAfterDynamicStepV23(
+        vessel,
+        rail
+      );
+
+    if (!validation.valid) {
+      invalidateRailV23(
+        vessel,
+        validation.reason
+      );
+
+      return result;
+    }
+
+    applyRailStateV23(
+      vessel,
+      rail,
+      prepared.endTime,
+      dt,
+      {
+        direct: false
+      }
+    );
+
+    return result;
+  };
+
+  const stepAllVesselsV23Base =
+    stepAllVessels;
+
+  stepAllVessels =
+  function stepAllVesselsV23(dt) {
+    try {
+      return stepAllVesselsV23Base(
+        dt
+      );
+    } finally {
+      runtime.preparedParentOrbitRailsV23 =
+        null;
+    }
+  };
+
+  /* =======================================================================
+     Fixed orbital telemetry and map invariants
+     ======================================================================= */
+
+  const orbitalElementsForObjectV23Base =
+    orbitalElementsForObject;
+
+  orbitalElementsForObject =
+  function orbitalElementsForObjectV23(
+    object,
+    referenceBody
+  ) {
+    let elements =
+      orbitalElementsForObjectV23Base(
+        object,
+        referenceBody
+      );
+
+    if (
+      !object ||
+      object.type !== "vessel"
+    ) {
+      return elements;
+    }
+
+    const rail =
+      railsV23.get(
+        object.id
+      );
+
+    if (
+      !rail ||
+      rail.referenceBodyId !==
+        referenceBody?.id
+    ) {
+      return elements;
+    }
+
+    if (!elements) {
+      const state =
+        relativeState(
+          object,
+          referenceBody
+        );
+
+      elements =
+        orbitalElementsFromRelativeState(
+          state.x,
+          state.y,
+          state.vx,
+          state.vy,
+          rail.mu
+        );
+    }
+
+    return applyRailInvariantsV23(
+      elements,
+      rail
+    );
+  };
+
+  /* =======================================================================
+     Orbit-changing event invalidation
+     ======================================================================= */
+
+  const activateNextStageV23Base =
+    activateNextStage;
+
+  activateNextStage =
+  function activateNextStageV23(vessel) {
+    invalidateRailV23(
+      vessel,
+      "stage activation"
+    );
+
+    return activateNextStageV23Base(
+      vessel
+    );
+  };
+
+  const splitDisconnectedVesselV23Base =
+    splitDisconnectedVessel;
+
+  splitDisconnectedVessel =
+  function splitDisconnectedVesselV23(
+    vessel,
+    options = {}
+  ) {
+    invalidateRailV23(
+      vessel,
+      options.reason ||
+      "vessel separation"
+    );
+
+    const separated =
+      splitDisconnectedVesselV23Base(
+        vessel,
+        options
+      );
+
+    invalidateRailV23(
+      vessel,
+      "post-separation state"
+    );
+
+    for (const item of separated || []) {
+      invalidateRailV23(
+        item,
+        "new separated vessel"
+      );
+    }
+
+    return separated;
+  };
+
+  const mergeDockedVesselsV23Base =
+    mergeDockedVessels;
+
+  mergeDockedVessels =
+  function mergeDockedVesselsV23(
+    vesselA,
+    vesselB,
+    portA,
+    portB
+  ) {
+    invalidateRailV23(
+      vesselA,
+      "docking merge"
+    );
+
+    invalidateRailV23(
+      vesselB,
+      "docking merge"
+    );
+
+    const merged =
+      mergeDockedVesselsV23Base(
+        vesselA,
+        vesselB,
+        portA,
+        portB
+      );
+
+    invalidateRailV23(
+      merged,
+      "new docked assembly"
+    );
+
+    return merged;
+  };
+
+  const undockPortV23Base =
+    undockPort;
+
+  undockPort =
+  function undockPortV23(
+    vessel,
+    partId
+  ) {
+    invalidateRailV23(
+      vessel,
+      "undocking"
+    );
+
+    const result =
+      undockPortV23Base(
+        vessel,
+        partId
+      );
+
+    if (result) {
+      for (const item of sim.vessels) {
+        if (
+          item.parts.some(part => (
+            part.id === partId ||
+            part.runtime?.dockedPartId ===
+              partId
+          ))
+        ) {
+          invalidateRailV23(
+            item,
+            "post-undock state"
+          );
+        }
+      }
+    }
+
+    return result;
+  };
+
+  const failPartV23Base =
+    failPart;
+
+  failPart =
+  function failPartV23(
+    vessel,
+    part,
+    reason
+  ) {
+    invalidateRailV23(
+      vessel,
+      reason ||
+      "part failure"
+    );
+
+    return failPartV23Base(
+      vessel,
+      part,
+      reason
+    );
+  };
+
+  const destroyVesselV23Base =
+    destroyVessel;
+
+  destroyVessel =
+  function destroyVesselV23(
+    vessel,
+    reason
+  ) {
+    invalidateRailV23(
+      vessel,
+      reason ||
+      "vessel destroyed"
+    );
+
+    return destroyVesselV23Base(
+      vessel,
+      reason
+    );
+  };
+
+  const removeVesselV23Base =
+    removeVessel;
+
+  removeVessel =
+  function removeVesselV23(
+    vesselOrId
+  ) {
+    invalidateRailV23(
+      vesselOrId,
+      "vessel removed"
+    );
+
+    return removeVesselV23Base(
+      vesselOrId
+    );
+  };
+
+  const setVesselThrottleV23Base =
+    setVesselThrottle;
+
+  setVesselThrottle =
+  function setVesselThrottleV23(
+    vessel,
+    value
+  ) {
+    if (
+      vessel &&
+      finiteV23(value) > 0
+    ) {
+      invalidateRailV23(
+        vessel,
+        "throttle applied"
+      );
+    }
+
+    return setVesselThrottleV23Base(
+      vessel,
+      value
+    );
+  };
+
+  if (
+    typeof makeSurfaceLinkV5 ===
+    "function"
+  ) {
+    const makeSurfaceLinkV23Base =
+      makeSurfaceLinkV5;
+
+    makeSurfaceLinkV5 =
+    function makeSurfaceLinkV23(
+      vessel,
+      body,
+      longitude,
+      options = {}
+    ) {
+      invalidateRailV23(
+        vessel,
+        options.kind === "water"
+          ? "splashdown"
+          : "surface contact"
+      );
+
+      return makeSurfaceLinkV23Base(
+        vessel,
+        body,
+        longitude,
+        options
+      );
+    };
+  }
+
+  if (
+    typeof breakupVesselV5 ===
+    "function"
+  ) {
+    const breakupVesselV23Base =
+      breakupVesselV5;
+
+    breakupVesselV5 =
+    function breakupVesselV23(
+      vessel,
+      contact
+    ) {
+      invalidateRailV23(
+        vessel,
+        "vessel breakup"
+      );
+
+      return breakupVesselV23Base(
+        vessel,
+        contact
+      );
+    };
+  }
+
+  /* =======================================================================
+     Backward-compatible optional persistence
+
+     The field is optional. Old saves without it reacquire rails from their
+     restored exact state on the next simulation step. No schema bump is
+     required.
+     ======================================================================= */
+
+  function serializeRailV23(rail) {
+    const rebasedMeanAnomaly =
+      wrapAngle(
+        rail.meanAnomaly +
+        rail.meanMotion *
+        (
+          sim.time -
+          rail.epochTime
+        )
+      );
+
+    return {
+      version:
+        PATCH_VERSION_V23,
+
+      vesselId:
+        rail.vesselId,
+
+      referenceBodyId:
+        rail.referenceBodyId,
+
+      epochTime:
+        sim.time,
+
+      a:
+        rail.a,
+
+      e:
+        rail.e,
+
+      pX:
+        rail.pX,
+
+      pY:
+        rail.pY,
+
+      direction:
+        rail.direction,
+
+      mu:
+        rail.mu,
+
+      meanAnomaly:
+        rebasedMeanAnomaly,
+
+      capturedAt:
+        rail.capturedAt,
+
+      revision:
+        rail.revision
+    };
+  }
+
+  function deserializeRailV23(
+    raw,
+    vessel
+  ) {
+    if (
+      !raw ||
+      typeof raw !== "object" ||
+      !vessel
+    ) {
+      return null;
+    }
+
+    const parent =
+      getBody(
+        raw.referenceBodyId
+      );
+
+    if (!bodyIsValidParentV23(parent)) {
+      return null;
+    }
+
+    const a =
+      finiteV23(raw.a, NaN);
+
+    const e =
+      finiteV23(raw.e, NaN);
+
+    const rawPX =
+      finiteV23(raw.pX, NaN);
+
+    const rawPY =
+      finiteV23(raw.pY, NaN);
+
+    const mu =
+      finiteV23(raw.mu, NaN);
+
+    const meanAnomaly =
+      finiteV23(
+        raw.meanAnomaly,
+        NaN
+      );
+
+    const epochTime =
+      finiteV23(
+        raw.epochTime,
+        sim.time
+      );
+
+    if (
+      !Number.isFinite(a) ||
+      !Number.isFinite(e) ||
+      !Number.isFinite(rawPX) ||
+      !Number.isFinite(rawPY) ||
+      !Number.isFinite(mu) ||
+      !Number.isFinite(meanAnomaly) ||
+      a <= 0 ||
+      e < 0 ||
+      e >= 0.995 ||
+      mu <= 0
+    ) {
+      return null;
+    }
+
+    const p =
+      normalized(
+        rawPX,
+        rawPY
+      );
+
+    const direction =
+      Number(raw.direction) < 0
+        ? -1
+        : 1;
+
+    const q =
+      direction > 0
+        ? {
+            x: -p.y,
+            y: p.x
+          }
+        : {
+            x: p.y,
+            y: -p.x
+          };
+
+    const root =
+      Math.sqrt(
+        Math.max(
+          1e-15,
+          1 - e * e
+        )
+      );
+
+    const meanMotion =
+      Math.sqrt(
+        mu /
+        (a * a * a)
+      );
+
+    return {
+      version:
+        PATCH_VERSION_V23,
+
+      vesselId:
+        vessel.id,
+
+      referenceBodyId:
+        parent.id,
+
+      referenceBodyName:
+        parent.name,
+
+      epochTime,
+
+      a,
+      e,
+
+      pX:
+        p.x,
+
+      pY:
+        p.y,
+
+      qX:
+        q.x,
+
+      qY:
+        q.y,
+
+      root,
+
+      direction,
+
+      mu,
+
+      meanAnomaly:
+        wrapAngle(
+          meanAnomaly
+        ),
+
+      meanMotion,
+
+      periapsis:
+        a * (1 - e),
+
+      apoapsis:
+        a * (1 + e),
+
+      period:
+        TWO_PI /
+        meanMotion,
+
+      longitudeOfPeriapsis:
+        Math.atan2(
+          p.y,
+          p.x
+        ),
+
+      capturedAt:
+        finiteV23(
+          raw.capturedAt,
+          sim.time
+        ),
+
+      revision:
+        Math.max(
+          1,
+          Math.round(
+            finiteV23(
+              raw.revision,
+              1
+            )
+          )
+        )
+    };
+  }
+
+  const serializeSimulationV23Base =
+    serializeSimulation;
+
+  serializeSimulation =
+  function serializeSimulationV23() {
+    const save =
+      serializeSimulationV23Base();
+
+    save.persistentParentOrbitRailsV23 =
+      [...railsV23.values()]
+        .filter(rail =>
+          sim.vesselMap.has(
+            rail.vesselId
+          )
+        )
+        .map(
+          serializeRailV23
+        );
+
+    save.persistentParentOrbitRailsVersionV23 =
+      PATCH_VERSION_V23;
+
+    return save;
+  };
+
+  const restoreSimulationV23Base =
+    restoreSimulation;
+
+  restoreSimulation =
+  function restoreSimulationV23(save) {
+    clearAllRailsV23(
+      "simulation restore"
+    );
+
+    clearLegacyOrbitLocksV23();
+
+    const result =
+      restoreSimulationV23Base(
+        save
+      );
+
+    const records =
+      Array.isArray(
+        save?.persistentParentOrbitRailsV23
+      )
+        ? save.persistentParentOrbitRailsV23
+        : [];
+
+    for (const raw of records) {
+      const vessel =
+        sim.vesselMap.get(
+          raw?.vesselId
+        );
+
+      if (!vessel) continue;
+
+      const rail =
+        deserializeRailV23(
+          raw,
+          vessel
+        );
+
+      if (!rail) continue;
+
+      if (
+        coastBlockingReasonV23(vessel)
+      ) {
+        continue;
+      }
+
+      const parent =
+        getBody(
+          rail.referenceBodyId
+        );
+
+      if (
+        trajectoryConflictsWithTransferTargetV23(
+          vessel,
+          parent,
+          rail.periapsis,
+          rail.apoapsis
+        )
+      ) {
+        continue;
+      }
+
+      const match =
+        stateMatchesRailV23(
+          vessel,
+          parent,
+          rail
+        );
+
+      if (!match.matches) {
+        continue;
+      }
+
+      railsV23.set(
+        vessel.id,
+        rail
+      );
+
+      vessel.orbitLockedV23 =
+        true;
+
+      vessel.orbitRailReasonV23 =
+        "restored stable parent-relative coast";
+
+      vessel.orbitRailRevisionV23 =
+        rail.revision;
+
+      updateLockedTelemetryV23(
+        vessel,
+        parent,
+        rail
+      );
+    }
+
+    return result;
+  };
+
+  const initializeCelestialCatalogV23Base =
+    initializeCelestialCatalog;
+
+  initializeCelestialCatalog =
+  function initializeCelestialCatalogV23() {
+    clearAllRailsV23(
+      "celestial catalog initialization"
+    );
+
+    clearLegacyOrbitLocksV23();
+
+    return initializeCelestialCatalogV23Base();
+  };
+
+  const resetCelestialStatesV23Base =
+    resetCelestialStates;
+
+  resetCelestialStates =
+  function resetCelestialStatesV23() {
+    clearAllRailsV23(
+      "celestial state reset"
+    );
+
+    clearLegacyOrbitLocksV23();
+
+    return resetCelestialStatesV23Base();
+  };
+
+  /* =======================================================================
+     Diagnostics
+     ======================================================================= */
+
+  window.SolarProgram.persistentParentOrbitRailsV23 = {
+    version:
+      PATCH_VERSION_V23,
+
+    getRail(
+      vesselId =
+        sim.activeVesselId
+    ) {
+      const rail =
+        railsV23.get(
+          vesselId
+        );
+
+      return rail
+        ? deepClone(rail)
+        : null;
+    },
+
+    getRails() {
+      return [...railsV23.values()]
+        .map(rail => ({
+          vesselId:
+            rail.vesselId,
+
+          vesselName:
+            sim.vesselMap.get(
+              rail.vesselId
+            )?.name || "",
+
+          referenceBodyId:
+            rail.referenceBodyId,
+
+          referenceBodyName:
+            getBody(
+              rail.referenceBodyId
+            )?.name || "",
+
+          semiMajorAxis:
+            rail.a,
+
+          eccentricity:
+            rail.e,
+
+          periapsis:
+            rail.periapsis,
+
+          apoapsis:
+            rail.apoapsis,
+
+          period:
+            rail.period,
+
+          epochTime:
+            rail.epochTime,
+
+          capturedAt:
+            rail.capturedAt,
+
+          revision:
+            rail.revision
+        }));
+    },
+
+    invalidate(
+      vesselId =
+        sim.activeVesselId,
+      reason =
+        "manual diagnostic invalidation"
+    ) {
+      return invalidateRailV23(
+        vesselId,
+        reason
+      );
+    },
+
+    forceCapture(
+      vesselId =
+        sim.activeVesselId
+    ) {
+      const vessel =
+        sim.vesselMap.get(
+          vesselId
+        );
+
+      if (!vessel) {
+        return {
+          captured: false,
+          reason:
+            "vessel unavailable"
+        };
+      }
+
+      invalidateRailV23(
+        vessel,
+        "manual recapture"
+      );
+
+      const candidate =
+        chooseParentOrbitV23(
+          vessel
+        );
+
+      if (!candidate) {
+        return {
+          captured: false,
+          reason:
+            coastBlockingReasonV23(
+              vessel
+            ) ||
+            "no valid bound parking orbit"
+        };
+      }
+
+      const rail =
+        captureRailV23(
+          vessel,
+          candidate
+        );
+
+      return {
+        captured: true,
+        rail:
+          deepClone(rail)
+      };
+    },
+
+    verify(
+      vesselId =
+        sim.activeVesselId
+    ) {
+      const vessel =
+        sim.vesselMap.get(
+          vesselId
+        );
+
+      const rail =
+        railsV23.get(
+          vesselId
+        );
+
+      if (!vessel || !rail) {
+        return {
+          valid: false,
+          reason:
+            "no active rail"
+        };
+      }
+
+      const parent =
+        getBody(
+          rail.referenceBodyId
+        );
+
+      if (!parent) {
+        return {
+          valid: false,
+          reason:
+            "parent body unavailable"
+        };
+      }
+
+      const match =
+        stateMatchesRailV23(
+          vessel,
+          parent,
+          rail
+        );
+
+      const displayed =
+        orbitalElementsForObject(
+          vessel,
+          parent
+        );
+
+      return {
+        valid:
+          match.matches &&
+          displayed?.periapsis ===
+            rail.periapsis &&
+          displayed?.apoapsis ===
+            rail.apoapsis,
+
+        vesselId:
+          vessel.id,
+
+        vesselName:
+          vessel.name,
+
+        referenceBodyId:
+          parent.id,
+
+        referenceBodyName:
+          parent.name,
+
+        storedPeriapsis:
+          rail.periapsis,
+
+        displayedPeriapsis:
+          displayed?.periapsis,
+
+        storedApoapsis:
+          rail.apoapsis,
+
+        displayedApoapsis:
+          displayed?.apoapsis,
+
+        ...match
+      };
+    },
+
+    getLastEvent() {
+      return deepClone(
+        runtime
+          .lastParentOrbitRailEventV23 ||
+        null
+      );
+    },
+
+    getLastMismatch() {
+      return deepClone(
+        runtime
+          .lastParentOrbitRailMismatchV23 ||
+        null
+      );
+    }
+  };
+
+  runtime.persistentParentOrbitRailsPatchV23 =
+    true;
+
+  runtime.persistentParentOrbitRailsVersionV23 =
+    PATCH_VERSION_V23;
+})();
+
+/* SOLAR_PERSISTENT_PARENT_ORBIT_RAILS_V23_JS_END */
 </script>
 </body>
 </html>
